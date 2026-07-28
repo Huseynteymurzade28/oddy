@@ -1,73 +1,106 @@
 # Oddy
 
-A 2D platformer written in Odin + raylib. One large interconnected map: reach
-the exit door, and collect all 71 coins along the way if you want the bonus.
+A 2D run-based platform shooter in Odin + raylib. Every run builds a fresh
+network of rooms: find the rune-key, unseal the vault, and break the warden.
 
 ```
-odin run . -out:oddy
+odin run src -out:oddy
 ```
+
+Asset paths are relative to the working directory, so run it from the repo root.
+
+## The run
+
+The Hollow under Greyreach took the mine, then the miners, then the town. At the
+bottom of it the warden — a golem built to keep the deep sealed — has spent a
+century feeding it instead.
+
+1. Explore the Hollow and find the **rune-key**.
+2. The key unseals the **warden's vault** — every door into it is barred until
+   you have it.
+3. **Break the warden.** That is the way out.
+
+Dying rebuilds the whole map, so no two descents are the same.
 
 ## Controls
 
 | Key | |
 |---|---|
-| `A` / `D` or arrow keys | walk |
-| `Space` / `W` / `Up` | jump — hold for a higher one |
-| `Down` / `S` | drop through a one-way platform |
+| `A` `D` / arrows | move |
+| `Space` | jump — again in the air to double jump |
+| `Space` against a wall | wall jump |
+| Mouse | aim |
+| Left click | shoot |
+| `E` | open a chest, again to take the gun |
 | `F11` | fullscreen |
-| `R` | restart (on the finish screen) |
+| `R` | new run (on an end screen) |
 
 ## Mechanics
 
-- **Coyote time** (0.10 s): you can still jump for a moment after walking off a
-  ledge.
-- **Jump buffer** (0.12 s): a jump pressed just before landing still counts.
-- **Variable jump height**: releasing the jump key early cuts the upward speed.
-- **Stomping**: landing on a slime squashes it and bounces you; touching one
-  from the side costs a heart and grants a short invulnerability window.
-- **3 hearts + checkpoints**: running out of hearts, or falling into water or
-  lava, sends you back to the last sign you touched. Collected coins stay
-  collected, enemies come back. Fruit refills one heart.
+- **Rolled weapons.** Chests roll a gun from a class and a rarity; deeper rooms
+  tilt the rarity table upward. The starting pistol never runs out of ammo, so a
+  run can never stall on an empty gun.
+- **Coyote time, jump buffering, variable jump height** — a jump pressed slightly
+  early or slightly late still counts, and releasing early cuts it short.
+- **Rooms wake up.** Enemies only act while you are in their room.
+- **The golem has two phases.** Its armour soaks half of everything until it
+  breaks, and the unarmoured form throws shockwaves along the floor.
 
-## File layout
+## Layout
+
+Code is one Odin package in `src/`. Odin makes a directory a package, and this
+game is small enough and cross-referential enough that splitting it into several
+would buy nothing but import cycles — so files are grouped by prefix instead, and
+`assets/` mirrors those groups.
 
 | File | |
 |---|---|
 | `main.odin` | window setup and the main loop |
-| `game.odin` | game state, update order, camera, background |
-| `level.odin` | parser turning the map text into tiles and entities |
-| `level_data.odin` | **the map itself** — one character per tile |
-| `tilemap.odin` | tile grid, materials, decorations, drawing |
-| `physics.odin` | axis-separated AABB vs tile collision, one-way platforms |
-| `player.odin` | player physics, jump feel, damage and death |
-| `enemy.odin` | slime patrol and squashing |
-| `pickup.odin` | coins and fruit |
-| `checkpoint.odin` | checkpoint signs and the exit door |
+| `game.odin` | the `Game` struct, update order, draw order |
+| `camera.odin` | virtual resolution, room-locked camera, parallax, vignette |
+| `lore.odin` | **the story** — every line of prose in the game |
+| `world.odin` | the room grid: roles, doors, queries |
+| `world_gen.odin` | growing a run: layout, stamping, doors, spawns |
+| `world_templates.odin` | **the room shapes** — one character per tile |
+| `tilemap.odin` | tile grid, materials, nine-slicing, drawing |
+| `physics.odin` | axis-separated AABB vs tiles, one-way platforms |
+| `player.odin` | movement, jump feel, damage, shooting |
+| `enemy.odin` | walkers, flyers, and the golem's two phases |
+| `weapon.odin` | weapon classes, rarity rolls, holding and drawing a gun |
+| `bullet.odin` | shots, impacts, muzzle flashes, sparks |
+| `chest.odin` | chests and the take-it-or-leave-it prompt |
+| `pickup.odin` | coins, healing runes, the key |
 | `animation.odin` | sprite sheets and the animation player |
-| `assets.odin` | all loading/unloading and animation clips in one place |
-| `hud.odin` | hearts, coin counter, menu screens |
+| `assets.odin` | every file the game loads, in one place |
+| `hud.odin` | shared drawing helpers, hearts, coins, weapon panel |
+| `hud_minimap.odin` | the map panel |
+| `hud_screens.odin` | title and end cards |
 
-## Editing the map
+## Editing rooms
 
-The text block in `level_data.odin` *is* the map — one character per 16x16
-tile. The legend lives at the top of `level.odin`:
+`world_templates.odin` holds the room shapes as text, one character per 16x16
+tile, `ROOM_W` x `ROOM_H` per block. The legend is at the top of that file:
 
 ```
-  .  empty            @  player spawn      T  tree
-  #  earth/grass      X  exit door         b  bush
-  S  stone            c  checkpoint sign   h  flowers
-  G  gold             o  coin              m  mushroom
-  =  one-way plat     f  fruit (heals 1)   n  fence
-  W  water (deadly)   g  green slime
-  L  lava (deadly)    p  purple slime (fast)
+  terrain                 spawn candidates
+    .  empty                E  enemy
+    #  rock                 C  chest
+    X  bedrock              o  coin
+    %  mossy surface        r  health rune
+    =  one-way platform     S  the player's starting flag
+    ~  water (deadly)       K  the boss key
+                            B  the boss
 ```
 
-Rows do not have to be the same length; the longest one sets the map width.
-Entity and decoration characters leave the tile itself empty, so a coin resting
-on the ground is written on the row above the ground.
+Spawn characters are offers, not orders — the generator decides how many of them
+a given room actually uses, based on its role and how deep it is.
+
+Doors are punched through templates after the fact, so two rules keep a run
+traversable: columns `DOOR_X..DOOR_X+3` must stay clear on the top rows with
+something to jump from below, and rows `DOOR_Y..DOOR_Y+2` must stay clear along
+both side walls.
 
 ## Assets
 
-Everything under `assets/` comes from Brackeys' free 2D platformer pack (see
-`assets/LICENSE & CREDITS.txt`). The player sprites (`player_idle.png`,
-`player_run.png`) are this project's own.
+See `assets/CREDITS.md`. Everything under `assets/` is loaded by `assets.odin`
+and nothing else opens a file, so moving or replacing art is a one-file change.
