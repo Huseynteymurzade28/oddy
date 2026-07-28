@@ -107,3 +107,18 @@ on_ground :: proc(m: ^Tilemap, r: rl.Rectangle) -> bool {
 	_, grounded, _ := move_y(m, r, 1)
 	return grounded
 }
+
+// Which side has a wall against it: -1 for left, +1 for right, 0 for neither.
+// The probe is inset vertically so that standing in a corner, or brushing a
+// ceiling, does not read as a climbable wall.
+wall_side :: proc(m: ^Tilemap, r: rl.Rectangle) -> f32 {
+	probe := rl.Rectangle{r.x - 2, r.y + 4, 2, r.height - 8}
+	if tilemap_overlaps_solid(m, probe) {
+		return -1
+	}
+	probe.x = r.x + r.width
+	if tilemap_overlaps_solid(m, probe) {
+		return 1
+	}
+	return 0
+}

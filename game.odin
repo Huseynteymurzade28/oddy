@@ -6,60 +6,89 @@ import rl "vendor:raylib"
 
 // The game is rendered at a fixed virtual height and scaled up to the window,
 // so it always shows the same amount of world regardless of resolution.
-PIXEL_HEIGHT :: 180.0
+// 240 tall shows about fifteen tiles, which is enough of a room to see a flyer
+// coming without shrinking the player into a dot.
+PIXEL_HEIGHT :: 240.0
 CAMERA_LOOKUP :: 14.0 // how far above the feet the camera aims
-CAMERA_SMOOTH :: 9.0
+CAMERA_SMOOTH :: 10.0
+AIM_LEAD :: 30.0 // how far the camera leans toward where you are aiming
 
 Game_State :: enum {
 	Title,
 	Playing,
+	Dead,
 	Won,
 }
 
 Game :: struct {
-	assets:      Assets,
-	world:       Tilemap,
-	player:      Player,
-	enemies:     [dynamic]Enemy,
-	pickups:     [dynamic]Pickup,
-	checkpoints: [dynamic]Checkpoint,
-	goal:        Goal,
-	coins_total: int,
-	coins_taken: int,
-	state:       Game_State,
-	time:        f32,
-	play_time:   f32,
-	shake:       f32,
-	camera:      rl.Camera2D,
+	assets:       Assets,
+	world:        World,
+	map_tiles:    Tilemap,
+	player:       Player,
+	enemies:      [dynamic]Enemy,
+	bullets:      [dynamic]Bullet,
+	sparks:       [dynamic]Spark,
+	pickups:      [dynamic]Pickup,
+	chests:       [dynamic]Chest,
+	coins_total:  int,
+	state:        Game_State,
+	time:         f32, // wall clock, keeps running on menus
+	run_time:     f32,
+	shake:        f32,
+	camera:       rl.Camera2D,
+	room:         [2]int, // the room the player is currently standing in
+	boss_down:    bool,
+	flag_pos:     rl.Vector2,
+
+	// a one-line message across the middle of the screen
+	notice:       string,
+	notice_timer: f32,
+
+	// carried between runs, for the death screen
+	runs:         int,
+	best_rooms:   int,
+	best_kills:   int,
 }
 
 game_init :: proc(g: ^Game) {
 	assets_load(&g.assets)
-	level_load(g)
+	game_new_run(g)
 	g.state = .Title
-	g.camera = {
-		zoom   = 1,
-		target = g.player.pos,
-	}
 	rl.PlayMusicStream(g.assets.music)
 }
 
 game_destroy :: proc(g: ^Game) {
 	assets_unload(&g.assets)
-	tilemap_destroy(&g.world)
+	tilemap_destroy(&g.map_tiles)
+	world_destroy(&g.world)
 	delete(g.enemies)
+	delete(g.bullets)
+	delete(g.sparks)
 	delete(g.pickups)
-	delete(g.checkpoints)
+	delete(g.chests)
 }
 
-game_restart :: proc(g: ^Game) {
-	tilemap_destroy(&g.world)
-	level_load(g)
-	g.coins_taken = 0
-	g.play_time = 0
+// Throws the whole world away and builds a new one. Nothing except the records
+// on the death screen survives a run.
+game_new_run :: proc(g: ^Game) {
+	tilemap_destroy(&g.map_tiles)
+	world_destroy(&g.world)
+
+	g.runs += 1
+	g.run_time = 0
 	g.shake = 0
+	g.boss_down = false
+	g.notice = ""
+	g.notice_timer = 0
+
+	world_generate(g)
+
 	g.state = .Playing
-	g.camera.target = g.player.pos
+	g.room = room_coords(g.player.pos)
+	g.camera = {
+		zoom   = 1,
+		target = g.player.pos,
+	}
 }
 
 game_update :: proc(g: ^Game, dt: f32) {
@@ -72,11 +101,11 @@ game_update :: proc(g: ^Game, dt: f32) {
 			g.state = .Playing
 		}
 	case .Playing:
-		g.play_time += dt
+		g.run_time += dt
 		game_update_play(g, dt)
-	case .Won:
+	case .Dead, .Won:
 		if rl.IsKeyPressed(.R) {
-			game_restart(g)
+			game_new_run(g)
 		}
 	}
 
@@ -85,84 +114,83 @@ game_update :: proc(g: ^Game, dt: f32) {
 
 @(private = "file")
 game_update_play :: proc(g: ^Game, dt: f32) {
-	player_update(&g.player, &g.world, &g.assets, dt)
+	g.notice_timer = max(0, g.notice_timer - dt)
 
-	// Dying costs no progress: the world's enemies come back, the coins stay
-	// collected, and the player returns to the last sign they touched.
-	if g.player.dead && g.player.respawn_timer <= 0 {
-		player_respawn(&g.player)
-		for &e in g.enemies {
-			enemy_reset(&e)
-		}
+	player_update(g, dt)
+
+	// Walking into a room reveals it on the map.
+	g.room = room_coords(g.player.pos)
+	if room := room_at(&g.world, g.room.x, g.room.y); room != nil {
+		room.seen = true
 	}
 
-	for &e in g.enemies {
-		enemy_update(&e, &g.world, &g.assets, dt)
+	for i in 0 ..< len(g.enemies) {
+		enemy_update(g, i, dt)
 	}
+	bullets_update(g, dt)
+	sparks_update(g, dt)
+
 	for &p in g.pickups {
 		pickup_update(&p, &g.assets, dt)
 	}
-	for &c in g.checkpoints {
-		c.pulse = max(0, c.pulse - dt * 2)
+	for i in 0 ..< len(g.chests) {
+		chest_update(g, i, dt)
 	}
 
+	if rl.IsKeyPressed(.E) {
+		chests_interact(g)
+	}
+	pickups_collect(g)
+
+	// Touching anything alive costs a heart; the invulnerability window is what
+	// makes brawling at close range survivable rather than instant death.
 	if !g.player.dead {
 		pr := player_rect(g.player)
-
-		for &p in g.pickups {
-			if p.taken || !rl.CheckCollisionRecs(pr, pickup_rect(p)) {
+		for e in g.enemies {
+			if !e.alive || !rl.CheckCollisionRecs(pr, enemy_rect(e)) {
 				continue
 			}
-			switch p.kind {
-			case .Coin:
-				p.taken = true
-				g.coins_taken += 1
-				play(&g.assets, .Coin)
-			case .Fruit:
-				// Fruit is only consumed if it can actually heal.
-				if player_heal(&g.player) {
-					p.taken = true
-					play(&g.assets, .Power_Up)
-				}
-			}
-		}
-
-		// Landing on a slime squashes it; touching it any other way hurts.
-		for &e in g.enemies {
-			if !e.alive {
-				continue
-			}
-			er := enemy_rect(e)
-			if !rl.CheckCollisionRecs(pr, er) {
-				continue
-			}
-			if g.player.vel.y > 0 && pr.y + pr.height < er.y + ENEMY_H * 0.6 {
-				enemy_squash(&e, &g.assets)
-				g.player.vel.y = -STOMP_BOUNCE
-				g.player.holding_jump = true
-				g.shake = max(g.shake, 2.5)
-			} else if player_hurt(&g.player, &g.assets, e.pos.x) {
+			if player_hurt(&g.player, &g.assets, e.pos.x) {
 				g.shake = max(g.shake, 5)
 			}
-		}
-
-		for &c in g.checkpoints {
-			if c.active || !rl.CheckCollisionRecs(pr, checkpoint_rect(c)) {
-				continue
-			}
-			c.active = true
-			c.pulse = 1
-			g.player.spawn = checkpoint_spawn(c)
-			play(&g.assets, .Power_Up)
-		}
-
-		if rl.CheckCollisionRecs(pr, goal_rect(g.goal)) {
-			g.state = .Won
-			play(&g.assets, .Power_Up)
+			break
 		}
 	}
 
+	// Corpses are dropped once they have faded out.
+	live := 0
+	for e in g.enemies {
+		if e.alive || e.corpse > 0 {
+			g.enemies[live] = e
+			live += 1
+		}
+	}
+	resize(&g.enemies, live)
+
 	g.shake = max(0, g.shake - dt * 18)
+
+	if g.boss_down && g.state == .Playing {
+		g.state = .Won
+		record_run(g)
+	}
+	if g.player.dead && g.player.death_timer <= 0 {
+		g.state = .Dead
+		record_run(g)
+	}
+}
+
+@(private = "file")
+record_run :: proc(g: ^Game) {
+	seen := 0
+	for y in 0 ..< GRID_H {
+		for x in 0 ..< GRID_W {
+			if g.world.rooms[y][x].seen {
+				seen += 1
+			}
+		}
+	}
+	g.best_rooms = max(g.best_rooms, seen)
+	g.best_kills = max(g.best_kills, g.player.kills)
 }
 
 view_size :: proc() -> rl.Vector2 {
@@ -181,15 +209,32 @@ camera_update :: proc(g: ^Game, dt: f32) {
 	view := view_size()
 	half := view / 2
 
-	wanted := g.player.pos - {0, CAMERA_LOOKUP}
+	// Lean toward the crosshair, which buys a little more warning about what you
+	// are shooting at without letting the player leave the frame.
+	lead := rl.Vector2{math.cos(g.player.aim), math.sin(g.player.aim)} * AIM_LEAD
+	wanted := g.player.pos - {0, CAMERA_LOOKUP} + lead
 	g.camera.target += (wanted - g.camera.target) * min(1, CAMERA_SMOOTH * dt)
 
-	bounds := tilemap_bounds(&g.world)
-	if bounds.x > view.x {
-		g.camera.target.x = clamp(g.camera.target.x, half.x, bounds.x - half.x)
+	// The camera stays inside the room the player is in: crossing a doorway is
+	// what moves it on, which is what makes the map read as separate places.
+	bounds := room_rect(g.room)
+	if bounds.width > view.x {
+		g.camera.target.x = clamp(
+			g.camera.target.x,
+			bounds.x + half.x,
+			bounds.x + bounds.width - half.x,
+		)
+	} else {
+		g.camera.target.x = bounds.x + bounds.width / 2
 	}
-	if bounds.y > view.y {
-		g.camera.target.y = clamp(g.camera.target.y, half.y, bounds.y - half.y)
+	if bounds.height > view.y {
+		g.camera.target.y = clamp(
+			g.camera.target.y,
+			bounds.y + half.y,
+			bounds.y + bounds.height - half.y,
+		)
+	} else {
+		g.camera.target.y = bounds.y + bounds.height / 2
 	}
 }
 
@@ -203,7 +248,8 @@ game_draw :: proc(g: ^Game) {
 	view := camera_view(g)
 
 	rl.BeginDrawing()
-	draw_sky(view)
+	rl.ClearBackground({14, 12, 20, 255})
+	draw_background(g)
 
 	cam := g.camera
 	if g.shake > 0 {
@@ -214,61 +260,99 @@ game_draw :: proc(g: ^Game) {
 	}
 
 	rl.BeginMode2D(cam)
-	draw_parallax(view, 0.65, {74, 112, 105, 255}, 46, 96, -10)
-	draw_parallax(view, 0.40, {58, 92, 88, 255}, 34, 74, 2)
+	tilemap_draw(&g.map_tiles, &g.assets, view, g.time)
 
-	tilemap_draw(&g.world, &g.assets, view)
-
-	for c in g.checkpoints {
-		checkpoint_draw(c, &g.assets)
-	}
-	goal_draw(g.goal, &g.assets, g.time)
+	draw_start_flag(g)
 	for p in g.pickups {
 		pickup_draw(p, &g.assets)
 	}
+	for c in g.chests {
+		chest_draw(c, &g.assets, g.time)
+	}
 	for e in g.enemies {
-		enemy_draw(e)
+		enemy_draw(e, &g.assets)
 	}
 	player_draw(g.player, &g.assets)
+	for e in g.enemies {
+		enemy_draw_health(e)
+	}
+	bullets_draw(g)
+	draw_vignette(g, view)
 	rl.EndMode2D()
 
 	hud_draw(g)
 	rl.EndDrawing()
 }
 
-// World height of the outdoor ground line. The parallax hills sit on it and the
-// sky darkens into cave gloom below it.
-HORIZON_Y :: 33 * TILE
-
 @(private = "file")
-color_lerp :: proc(a, b: rl.Color, t: f32) -> rl.Color {
-	mix :: proc(x, y: u8, t: f32) -> u8 {
-		return u8(f32(x) + (f32(y) - f32(x)) * t)
-	}
-	return {mix(a.r, b.r, t), mix(a.g, b.g, t), mix(a.b, b.b, t), 255}
+draw_start_flag :: proc(g: ^Game) {
+	anim := &g.assets.flag
+	frame := int(g.time / max(anim.frame_time, 0.01)) % max(anim.count, 1)
+	anim_draw_frame(anim, frame, g.flag_pos, false)
 }
 
+// Everything is underground, so the far edges of the view fall off into dark.
 @(private = "file")
-draw_sky :: proc(view: rl.Rectangle) {
-	depth := clamp((view.y + view.height / 2 - HORIZON_Y) / (8 * TILE), 0, 1)
-	top := color_lerp({56, 78, 130, 255}, {16, 15, 26, 255}, depth)
-	bottom := color_lerp({124, 145, 200, 255}, {30, 27, 44, 255}, depth)
-	rl.DrawRectangleGradientV(0, 0, rl.GetScreenWidth(), rl.GetScreenHeight(), top, bottom)
+draw_vignette :: proc(g: ^Game, view: rl.Rectangle) {
+	edge := rl.Color{10, 8, 16, 120}
+	clear := rl.Color{10, 8, 16, 0}
+	band := view.height * 0.22
+	rl.DrawRectangleGradientV(
+		i32(view.x),
+		i32(view.y),
+		i32(view.width),
+		i32(band),
+		edge,
+		clear,
+	)
+	rl.DrawRectangleGradientV(
+		i32(view.x),
+		i32(view.y + view.height - band),
+		i32(view.width),
+		i32(band),
+		clear,
+		edge,
+	)
 }
 
-// Rolling hills anchored to the horizon that scroll slower than the world.
-// `depth` of 0 moves with the world, 1 would be pinned to the camera. Climbing
-// or descending simply carries them out of view.
+// Five parallax layers of forest seen through the cave mouth. They are drawn in
+// screen space, tiled horizontally, and darkened as they come closer so the
+// nearest one reads as a silhouette.
 @(private = "file")
-draw_parallax :: proc(view: rl.Rectangle, depth: f32, color: rl.Color, radius, spacing, y_offset: f32) {
-	base_y := f32(HORIZON_Y) + y_offset
-	if base_y - radius > view.y + view.height || base_y < view.y {
-		return
-	}
-	lag := view.x * depth
-	first := int(math.floor((view.x - lag) / spacing)) - 1
-	count := int(view.width / spacing) + 3
-	for i in first ..= first + count {
-		rl.DrawCircleV({f32(i) * spacing + lag, base_y}, radius, color)
+draw_background :: proc(g: ^Game) {
+	view := view_size()
+	s := f32(rl.GetScreenHeight()) / PIXEL_HEIGHT
+	layer_w: f32 = PIXEL_HEIGHT * 16 / 9
+
+	for i in 0 ..< BG_LAYERS {
+		tex := g.assets.layers[i]
+		if tex.id == 0 {
+			continue
+		}
+		depth := f32(i) / f32(BG_LAYERS - 1)
+		factor := 0.06 + depth * 0.24
+
+		ox := -g.camera.target.x * factor
+		ox -= math.floor(ox / layer_w) * layer_w // wrap into [0, layer_w)
+
+		// Each copy is drawn taller than the screen and its vertical drift is
+		// capped, so descending never slides an edge of the artwork into view.
+		height: f32 = PIXEL_HEIGHT * 1.6
+		drift := clamp(-g.camera.target.y * factor * 0.22, -PIXEL_HEIGHT * 0.4, 0)
+		oy := -(height - PIXEL_HEIGHT) / 2 + drift
+
+		shade := u8(118 - depth * 74)
+		tint := rl.Color{shade, u8(f32(shade) * 1.06), u8(f32(shade) * 1.18), 255}
+		src := rl.Rectangle{0, 0, f32(tex.width), f32(tex.height)}
+
+		for c in 0 ..< int(view.x / layer_w) + 3 {
+			dest := rl.Rectangle {
+				(ox - layer_w + f32(c) * layer_w) * s,
+				oy * s,
+				layer_w * s,
+				height * s,
+			}
+			rl.DrawTexturePro(tex, src, dest, {}, 0, tint)
+		}
 	}
 }

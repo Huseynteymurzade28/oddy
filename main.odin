@@ -17,6 +17,8 @@ main :: proc() {
 	rl.SetWindowMinSize(640, 360)
 	rl.SetWindowPosition(200, 120)
 	rl.SetTargetFPS(60)
+	// The HUD draws its own crosshair, so the system pointer is in the way.
+	rl.HideCursor()
 
 	rl.InitAudioDevice()
 	defer rl.CloseAudioDevice()
@@ -25,9 +27,15 @@ main :: proc() {
 	game_init(&game)
 	defer game_destroy(&game)
 
+	frame := 0
 	for !rl.WindowShouldClose() {
 		if rl.IsKeyPressed(.F11) {
 			rl.ToggleFullscreen()
+		}
+
+		frame += 1
+		if shot_harness(&game, frame) {
+			break
 		}
 
 		game_update(&game, min(rl.GetFrameTime(), MAX_STEP))
