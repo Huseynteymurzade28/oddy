@@ -9,6 +9,27 @@ odin run src -out:oddy
 
 Asset paths are relative to the working directory, so run it from the repo root.
 
+## In motion
+
+![Fighting through a room, then breaking the warden](media/oddy_highlights.gif)
+
+A full scripted run — title, start room, a fight, a chest, the stall, the key,
+the warden, the end card — is in [`media/oddy_demo.mp4`](media/oddy_demo.mp4)
+(33 seconds; GitHub plays it in the browser).
+
+| | |
+|---|---|
+| ![Title](media/01_title.png) | ![The start room](media/02_start_room.png) |
+| The title card, with the run's three steps. | The start room: flag, double jump, the map in the corner. |
+| ![A fight](media/03_combat.png) | ![A chest offer](media/04_chest_offer.png) |
+| A crab lunging; the pistol never runs dry. | A chest rolled a rifle, shown against what you hold. |
+| ![The stall](media/05_shop.png) | ![The key](media/06_key.png) |
+| The stall: three crates, never enough coins for all three. | Taking the rune-key opens the vault on the map. |
+| ![The warden](media/07_boss.png) | ![The warden, armour off](media/08_boss_broken.png) |
+| The warden in its armour, soaking half of everything. | Armour gone, and the fight changes. |
+| ![The way out](media/09_win.png) | ![The Hollow takes you](media/10_death.png) |
+| The end of a run. | The other end of a run. |
+
 ## The run
 
 The Hollow under Greyreach took the mine, then the miners, then the town. At the
