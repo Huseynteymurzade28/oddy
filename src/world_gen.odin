@@ -437,6 +437,7 @@ world_generate :: proc(g: ^Game) {
 	clear(&g.pickups)
 	clear(&g.chests)
 	clear(&g.bullets)
+	clear(&g.effects)
 	clear(&g.sparks)
 	g.coins_total = 0
 	g.shop = {}

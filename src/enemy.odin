@@ -136,6 +136,10 @@ TRAITS := [Enemy_Kind]Enemy_Traits {
 
 CORPSE_TIME :: 1.0
 HURT_TIME :: 0.18
+// A hit only interrupts what a creature is doing this often. Without the gap,
+// anything that fires faster than HURT_TIME could hold even the golem in place
+// forever, and the boss fight was just standing still with an SMG.
+STAGGER_COOLDOWN :: 0.6
 GOLEM_ARMOUR_SOAK :: 0.5 // fraction of incoming damage the armoured phase takes
 GOLEM_BREAK_AT :: 0.55 // health fraction at which the armour shatters
 
@@ -151,6 +155,7 @@ Enemy :: struct {
 	timer:      f32,
 	attack_cd:  f32,
 	hurt:       f32,
+	stagger_cd: f32, // until the next hit is allowed to interrupt it
 	bob:        f32,
 	alive:      bool,
 	corpse:     f32,
@@ -239,9 +244,10 @@ enemy_damage :: proc(g: ^Game, index: int, amount: f32, push: rl.Vector2) {
 		play(&g.assets, .Explode)
 		return
 	}
-	if e.state != .Attack {
+	if e.state != .Attack && e.stagger_cd <= 0 {
 		e.state = .Hurt
 		e.timer = HURT_TIME
+		e.stagger_cd = STAGGER_COOLDOWN
 		animator_restart(&e.anim, &anims_for(&g.assets, e^).hit)
 	}
 	play(&g.assets, .Hurt)
@@ -338,18 +344,30 @@ enemy_update :: proc(g: ^Game, index: int, dt: f32) {
 	}
 
 	e.hurt = max(0, e.hurt - dt)
+	e.stagger_cd = max(0, e.stagger_cd - dt)
 	e.attack_cd = max(0, e.attack_cd - dt)
 	e.bob += dt
 
 	// Creatures only wake up while the player is in their room. Otherwise a
 	// fight you cannot see would still be draining your health.
 	if room_coords(e.pos) != room_coords(g.player.pos) {
+		// Whatever it was doing settles back to idling. A swing left running
+		// would otherwise wait on an animation that is about to be swapped
+		// out from under it, and never end.
+		if e.state == .Chase || e.state == .Attack || e.state == .Hurt {
+			e.state = .Idle
+		}
 		if !t.flies {
 			e.vel.x = 0
 			walk_terrain(g, e, dt, false)
 		}
-		animator_play(&e.anim, &anims.idle)
+		// The armour coming apart is the one thing that has to keep playing,
+		// or the golem would be stuck untouchable until it finished.
+		if e.state != .Shatter {
+			animator_play(&e.anim, &anims.idle)
+		}
 		animator_update(&e.anim, dt)
+		enemy_check_drowned(g, index)
 		return
 	}
 
@@ -428,6 +446,7 @@ enemy_update :: proc(g: ^Game, index: int, dt: f32) {
 		animator_play(&e.anim, &anims.run)
 
 	case .Attack:
+		e.timer += dt
 		if t.flies {
 			e.pos += e.vel * dt
 			e.vel *= 1 - min(1, 2 * dt)
@@ -440,7 +459,10 @@ enemy_update :: proc(g: ^Game, index: int, dt: f32) {
 			e.swung = true
 			enemy_strike(g, index)
 		}
-		if e.anim.finished {
+		// Some creatures swing with a looping sheet (the skull and the pebble
+		// just fly at you), which never reports `finished`, so one full pass
+		// of the animation is the swing's length either way.
+		if e.anim.finished || e.timer >= anim_length(e.anim.anim) {
 			e.state = .Chase
 		}
 
@@ -448,6 +470,18 @@ enemy_update :: proc(g: ^Game, index: int, dt: f32) {
 	}
 
 	animator_update(&e.anim, dt)
+	enemy_check_drowned(g, index)
+}
+
+// Walkers that end up in water — knocked in by a shot, or lunging off a ledge —
+// have had their health zeroed by `walk_terrain`; this is where that becomes a
+// death rather than a creature wandering around with an empty health bar.
+@(private = "file")
+enemy_check_drowned :: proc(g: ^Game, index: int) {
+	e := &g.enemies[index]
+	if e.alive && e.health <= 0 {
+		enemy_die(g, index)
+	}
 }
 
 // The damaging half of an attack.

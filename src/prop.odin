@@ -148,6 +148,12 @@ scatter_props :: proc(g: ^Game) {
 						if below == .Platform && rule.layer != .Front {
 							continue
 						}
+						// The arena stays bare of anything at eye level: a boulder
+						// the size of the golem in front of the fight hides the
+						// swing you are meant to be reading.
+						if room.role == .Boss && rule.layer == .Level {
+							continue
+						}
 						tex := prop_texture(a, rule.kind, rand.int_max(PROP_VARIANTS))
 						if tex.id == 0 {
 							break

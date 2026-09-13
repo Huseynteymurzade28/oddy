@@ -180,17 +180,31 @@ draw_prompts :: proc(g: ^Game) {
 			draw_text_centered(a, "E   OPEN CHEST", view.y - 48, 8, {255, 214, 110, 255})
 			return
 		}
-		top := view.y - OFFER_UP
+		top := offer_top(g, chest_loot_pos(c) - {0, 10})
 		draw_weapon_offer(g, c.loot, top)
 		draw_text_centered(a, "E   TAKE IT", top + 36, 8, {255, 214, 110, 255})
 		return
 	}
 }
 
-// How far above the bottom of the screen an offer panel starts. It is four lines
-// tall, and the last of them has to clear the weapon panel underneath.
+// How far above the bottom of the screen an offer panel may start at the lowest.
+// It is four lines tall, and the last of them has to clear the weapon panel
+// underneath.
 @(private = "file")
 OFFER_UP :: 88.0
+@(private = "file")
+OFFER_H :: 44.0
+
+// Where an offer panel starts: just above the thing on offer, so the words never
+// sit on top of the gun or the stall they are describing. `anchor` is the top of
+// that thing in world space. A chest on the floor puts its loot exactly where a
+// bottom-anchored panel would land, which is why this follows the object.
+@(private = "file")
+offer_top :: proc(g: ^Game, anchor: rl.Vector2) -> f32 {
+	view := view_size()
+	screen_y := anchor.y - g.camera.target.y + view.y / 2
+	return clamp(screen_y - OFFER_H - 6, 8, view.y - OFFER_UP)
+}
 
 // Comparing a gun against what you are already holding is the whole decision, so
 // the numbers sit side by side rather than being left to memory. Chests and the
@@ -229,8 +243,7 @@ draw_weapon_offer :: proc(g: ^Game, w: Weapon, y: f32) {
 @(private = "file")
 draw_shop_prompt :: proc(g: ^Game, item: Shop_Item) {
 	a := &g.assets
-	view := view_size()
-	y := view.y - OFFER_UP
+	y := offer_top(g, shop_sign_top(g.shop))
 
 	if item.kind == .Weapon {
 		draw_weapon_offer(g, item.loot, y)

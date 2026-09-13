@@ -113,6 +113,14 @@ CRATE_H :: 26.0
 // and no closer, or it sits on the goods.
 @(private = "file")
 SIGN_GAP :: 18.0
+// Every pointer sprite in the pack is this tall.
+@(private = "file")
+SIGN_H :: 21.0
+
+// The highest point of the stall, for anything that has to be drawn clear of it.
+shop_sign_top :: proc(s: Shop) -> rl.Vector2 {
+	return {s.pos.x, s.pos.y - CRATE_H - SIGN_GAP - SIGN_H}
+}
 
 shop_item_pos :: proc(item: Shop_Item, time: f32) -> rl.Vector2 {
 	return item.pos + {0, -10 + math.sin(time * 2 + item.bob) * 1.5}

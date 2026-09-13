@@ -140,6 +140,14 @@ animator_update :: proc(a: ^Animator, dt: f32) {
 	}
 }
 
+// How long one pass through an animation takes. Zero for a still.
+anim_length :: proc(a: ^Anim) -> f32 {
+	if a == nil {
+		return 0
+	}
+	return f32(a.count) * a.frame_time
+}
+
 // How far through a non-looping animation we are, 0..1. Attacks use it to decide
 // when the damaging part of the swing happens.
 animator_progress :: proc(a: Animator) -> f32 {
