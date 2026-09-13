@@ -45,6 +45,7 @@ Room_Role :: enum u8 {
 	Start,
 	Normal,
 	Treasure,
+	Shop,
 	Key,
 	Boss,
 }

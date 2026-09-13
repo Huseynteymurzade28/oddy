@@ -99,7 +99,7 @@ assign_roles :: proc(w: ^World) {
 		w.rooms[second.y][second.x].role = .Key
 	}
 
-	// Two treasure rooms, picked from whatever is still ordinary.
+	// A stall and two treasure rooms, picked from whatever is still ordinary.
 	plain := make([dynamic][2]int, context.temp_allocator)
 	for y in 0 ..< GRID_H {
 		for x in 0 ..< GRID_W {
@@ -108,11 +108,49 @@ assign_roles :: proc(w: ^World) {
 			}
 		}
 	}
-	rand.shuffle(plain[:])
-	for i in 0 ..< min(2, len(plain)) {
-		cell := plain[i]
-		w.rooms[cell.y][cell.x].role = .Treasure
+
+	if cell, ok := pick_shop(w, plain[:]); ok {
+		w.rooms[cell.y][cell.x].role = .Shop
 	}
+
+	rand.shuffle(plain[:])
+	placed := 0
+	for cell in plain {
+		if placed >= 2 {
+			break
+		}
+		// The stall took one of these already.
+		if w.rooms[cell.y][cell.x].role != .Normal {
+			continue
+		}
+		w.rooms[cell.y][cell.x].role = .Treasure
+		placed += 1
+	}
+}
+
+// The stall belongs in a middling room: deep enough that there are coins in your
+// pocket by the time you find it, shallow enough that what you buy still has a
+// run left to matter in. So it goes in whichever ordinary room sits nearest the
+// halfway mark of the map.
+@(private = "file")
+pick_shop :: proc(w: ^World, plain: [][2]int) -> ([2]int, bool) {
+	deepest := 0
+	for y in 0 ..< GRID_H {
+		for x in 0 ..< GRID_W {
+			deepest = max(deepest, w.rooms[y][x].depth)
+		}
+	}
+	target := deepest / 2
+
+	best := [2]int{-1, -1}
+	best_gap := max(int)
+	for cell in plain {
+		gap := abs(w.rooms[cell.y][cell.x].depth - target)
+		if gap < best_gap {
+			best, best_gap = cell, gap
+		}
+	}
+	return best, best.x >= 0
 }
 
 @(private = "file")
@@ -126,6 +164,8 @@ template_for :: proc(role: Room_Role) -> string {
 		return ROOM_KEY
 	case .Treasure:
 		return ROOM_TREASURE
+	case .Shop:
+		return ROOM_SHOP
 	case .Normal:
 		return ROOM_TEMPLATES[rand.int_max(len(ROOM_TEMPLATES))]
 	case .Unused:
@@ -143,8 +183,10 @@ Spawns :: struct {
 	player:   [2]int,
 	key:      [2]int,
 	boss:     [2]int,
+	shop:     [2]int,
 	has_key:  bool,
 	has_boss: bool,
+	has_shop: bool,
 }
 
 @(private = "file")
@@ -195,6 +237,9 @@ stamp_room :: proc(m: ^Tilemap, cell: [2]int, template: string) -> Spawns {
 		case 'B':
 			s.boss = {tx, ty}
 			s.has_boss = true
+		case 'M':
+			s.shop = {tx, ty}
+			s.has_shop = true
 		}
 		x += 1
 	}
@@ -319,6 +364,11 @@ populate_room :: proc(g: ^Game, cell: [2]int, s: ^Spawns) {
 	if s.has_key {
 		append(&g.pickups, pickup_make(.Key, tile_centre(s.key)))
 	}
+	if s.has_shop {
+		if pos, ok := ground_below(&g.map_tiles, s.shop); ok {
+			g.shop = shop_make(pos, room.depth)
+		}
+	}
 
 	enemy_budget := 0
 	#partial switch room.role {
@@ -389,6 +439,7 @@ world_generate :: proc(g: ^Game) {
 	clear(&g.bullets)
 	clear(&g.sparks)
 	g.coins_total = 0
+	g.shop = {}
 
 	grow_layout(&g.world)
 	measure_depths(&g.world)
@@ -432,4 +483,8 @@ world_generate :: proc(g: ^Game) {
 	// Off to one side, so the banner is a landmark rather than something the
 	// player is permanently standing inside.
 	g.flag_pos = g.player.pos + {-28, 0}
+
+	// Scenery goes on last: it is the only pass that has to dodge everything the
+	// others placed.
+	scatter_props(g)
 }

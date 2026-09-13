@@ -26,6 +26,8 @@ Game :: struct {
 	sparks:       [dynamic]Spark,
 	pickups:      [dynamic]Pickup,
 	chests:       [dynamic]Chest,
+	shop:         Shop, // one stall per run, in the room that rolled it
+	props:        [dynamic]Prop, // scenery, rolled once per run and never updated
 	coins_total:  int,
 	state:        Game_State,
 	time:         f32, // wall clock, keeps running on menus
@@ -63,6 +65,7 @@ game_destroy :: proc(g: ^Game) {
 	delete(g.sparks)
 	delete(g.pickups)
 	delete(g.chests)
+	delete(g.props)
 }
 
 // Throws the whole world away and builds a new one. Nothing except the records
@@ -135,7 +138,9 @@ game_update_play :: proc(g: ^Game, dt: f32) {
 		chest_update(g, i, dt)
 	}
 
-	if rl.IsKeyPressed(.E) {
+	// One key for everything you can stand in front of. The stall gets first
+	// refusal, so a chest in the same room can never swallow a purchase.
+	if rl.IsKeyPressed(.E) && !shop_interact(g) {
 		chests_interact(g)
 	}
 	pickups_collect(g)
@@ -199,9 +204,14 @@ game_draw :: proc(g: ^Game) {
 	}
 
 	rl.BeginMode2D(cam)
+	// Scenery straddles the tilemap: the silhouettes go under it so the rock
+	// overlaps them, the floor clutter over it, and the grass over the player.
+	props_draw(g, .Behind)
 	tilemap_draw(&g.map_tiles, &g.assets, view, g.time)
+	props_draw(g, .Level)
 
 	draw_start_flag(g)
+	shop_draw(g)
 	for p in g.pickups {
 		pickup_draw(p, &g.assets)
 	}
@@ -212,6 +222,7 @@ game_draw :: proc(g: ^Game) {
 		enemy_draw(e, &g.assets)
 	}
 	player_draw(g.player, &g.assets)
+	props_draw(g, .Front)
 	for e in g.enemies {
 		enemy_draw_health(e)
 	}

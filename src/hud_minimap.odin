@@ -41,6 +41,7 @@ ROLE_COLORS := [Room_Role]rl.Color {
 	.Normal   = {96, 108, 138, 235},
 	.Start    = {110, 190, 130, 235},
 	.Treasure = {236, 200, 110, 235},
+	.Shop     = {130, 196, 210, 235},
 	.Key      = {240, 168, 92, 235},
 	.Boss     = {214, 84, 84, 235},
 }
@@ -188,6 +189,11 @@ draw_room_icon :: proc(role: Room_Role, cx, cy: f32, has_key: bool) {
 		fill_rect(cx - 3, cy - 2, 6, 2, INK)
 		fill_rect(cx - 3, cy, 6, 3, INK)
 		fill_rect(cx - 1, cy, 2, 1, ROLE_COLORS[.Treasure])
+	case .Shop:
+		// A coin: a ring with a dot in it.
+		fill_rect(cx - 3, cy - 2, 6, 5, INK)
+		fill_rect(cx - 2, cy - 1, 4, 3, ROLE_COLORS[.Shop])
+		fill_rect(cx - 1, cy, 2, 1, INK)
 	case .Key:
 		// A key: ring and shaft.
 		fill_rect(cx - 3, cy - 2, 3, 3, INK)

@@ -28,6 +28,9 @@ WALL_STICK_TIME :: 0.16 // how long a wall jump overrides the steering input
 INVULN_TIME :: 1.1
 DEATH_DELAY :: 1.4
 MAX_HEALTH :: 5
+// The shop can sell extra hearts, but only so many: past this the row of them
+// would run into the coin counter under it.
+HEALTH_CAP :: 8
 
 Player :: struct {
 	pos:          rl.Vector2, // at the feet, horizontally centred
@@ -42,6 +45,7 @@ Player :: struct {
 	wall_stick:   f32,
 	invuln:       f32,
 	health:       int,
+	max_health:   int, // starts at MAX_HEALTH; the shop can raise it
 	dead:         bool,
 	death_timer:  f32,
 	anim:         Animator,
@@ -50,6 +54,7 @@ Player :: struct {
 	aim:          f32, // radians, world space
 	weapon:       Weapon,
 	fire_cd:      f32,
+	fire_rate:    f32, // a multiplier the shop can buy up, 1 by default
 
 	// run progress
 	has_key:      bool,
@@ -59,9 +64,11 @@ Player :: struct {
 
 player_init :: proc(p: ^Player, spawn: rl.Vector2) {
 	p^ = Player {
-		pos    = spawn,
-		health = MAX_HEALTH,
-		weapon = weapon_starter(),
+		pos        = spawn,
+		health     = MAX_HEALTH,
+		max_health = MAX_HEALTH,
+		fire_rate  = 1,
+		weapon     = weapon_starter(),
 	}
 }
 
@@ -253,7 +260,7 @@ player_shoot :: proc(g: ^Game) {
 
 	hand := player_hand(p^)
 	weapon_fire(g, w, weapon_muzzle(w^, hand, p.aim), p.aim)
-	p.fire_cd = w.fire_time
+	p.fire_cd = w.fire_time / max(p.fire_rate, 0.1)
 	if !w.infinite {
 		w.ammo -= 1
 	}
@@ -315,10 +322,21 @@ player_kill :: proc(p: ^Player, a: ^Assets) {
 }
 
 player_heal :: proc(p: ^Player, amount := 1) -> bool {
-	if p.health >= MAX_HEALTH {
+	if p.health >= p.max_health {
 		return false
 	}
-	p.health = min(MAX_HEALTH, p.health + amount)
+	p.health = min(p.max_health, p.health + amount)
+	return true
+}
+
+// Buying a heart container raises the ceiling and fills the new slot, so the
+// purchase is felt immediately rather than only after finding a rune.
+player_add_heart :: proc(p: ^Player) -> bool {
+	if p.max_health >= HEALTH_CAP {
+		return false
+	}
+	p.max_health += 1
+	p.health += 1
 	return true
 }
 

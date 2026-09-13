@@ -12,6 +12,7 @@ tilemap, so they all have to be exactly ROOM_W x ROOM_H characters.
 	  =  one-way platform     S  the player's starting flag
 	  ~  water (deadly)       K  the boss key
 	                          B  the boss
+	                          M  the stall (needs clear air above it)
 
 Spawn candidates are only offers: the generator decides how many of them a
 particular room actually uses.
@@ -108,6 +109,28 @@ ROOM_TREASURE :: `################################
 #..............r...............#
 #..........C.......C...........#
 #..............................#
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX`
+
+// The stall room. Everything is pushed to the right of centre on purpose: the
+// crates and the sign over them need an empty alcove, and a south door would
+// carve the floor out from under anything standing in the middle.
+ROOM_SHOP :: `################################
+#..............................#
+#..............................#
+#..........========............#
+#..............................#
+#.................o.......o....#
+#...............======...====..#
+#..............................#
+#..............................#
+#.................====.........#
+#..............o.........o.....#
+#.............====....====.....#
+#..............................#
+#..............................#
+#..............................#
+#.......M......................#
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX`
 

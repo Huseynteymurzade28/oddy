@@ -46,6 +46,29 @@ Golem_Anims :: struct {
 	slam:   Anim, // the unarmoured wind-up that throws shockwaves
 }
 
+// `assets/sprites/objects/` splits two ways: `animated/` holds sprite sheets that
+// play, and the rest are folders of numbered still images used as scenery. A kind
+// is a folder, so a room can pick a variant without the code naming every file.
+Prop_Kind :: enum u8 {
+	Grass,
+	Bush,
+	Stone,
+	Ridge,
+	Fence,
+	Box,
+	Tree,
+	Willow,
+	Ladder,
+	Pointer,
+}
+
+PROP_VARIANTS :: 10
+
+Prop_Set :: struct {
+	tex:   [PROP_VARIANTS]rl.Texture2D,
+	count: int,
+}
+
 Assets :: struct {
 	player:  Player_Anims,
 	enemy:   [Enemy_Kind]Creature_Anims,
@@ -56,6 +79,7 @@ Assets :: struct {
 	key:     Anim,
 	rune:    Anim,
 	flag:    Anim,
+	props:   [Prop_Kind]Prop_Set,
 	tileset: rl.Texture2D,
 	weapons: rl.Texture2D,
 	layers:  [BG_LAYERS]rl.Texture2D,
@@ -65,6 +89,24 @@ Assets :: struct {
 }
 
 BG_LAYERS :: 5
+
+// Which folder each prop kind reads, and how many variants are in it.
+@(private = "file")
+PROP_SOURCE := [Prop_Kind]struct {
+	folder: cstring,
+	count:  int,
+} {
+	.Grass   = {"grass", 10},
+	.Bush    = {"bushes", 9},
+	.Stone   = {"stones", 5},
+	.Ridge   = {"ridges", 6},
+	.Fence   = {"fence", 3},
+	.Box     = {"boxes", 6},
+	.Tree    = {"trees", 3},
+	.Willow  = {"willows", 3},
+	.Ladder  = {"ladders", 6},
+	.Pointer = {"pointers", 8},
+}
 
 // Creature sheets are 64x64 cells with the artwork padded inside them, so each
 // one needs to say how far down its cell the ground line sits.
@@ -172,12 +214,21 @@ assets_load :: proc(a: ^Assets) {
 	a.bullets[.Shotgun] = anim_load(U + "shotgun.png", 20, 28, 7, SHOT_FRAME_TIME)
 	a.bullets[.Laser] = anim_load(U + "laser.png", 40, 22, 9, SHOT_FRAME_TIME)
 
-	O :: "assets/sprites/objects/"
+	O :: "assets/sprites/objects/animated/"
 	a.chest = anim_load(O + "chest.png", 32, 32, 4, 0.09)
 	a.coin = anim_load(O + "coin.png", 10, 10, 4, 0.09, true)
 	a.key = anim_load(O + "key.png", 12, 8, 4, 0.12, true)
 	a.rune = anim_load(O + "rune.png", 16, 16, 4, 0.12, true)
 	a.flag = anim_load(O + "flag.png", 48, 48, 4, 0.15, true)
+
+	for kind in Prop_Kind {
+		src := PROP_SOURCE[kind]
+		a.props[kind].count = min(src.count, PROP_VARIANTS)
+		for i in 0 ..< a.props[kind].count {
+			path := rl.TextFormat("assets/sprites/objects/%s/%d.png", src.folder, i32(i + 1))
+			a.props[kind].tex[i] = rl.LoadTexture(path)
+		}
+	}
 
 	a.tileset = rl.LoadTexture("assets/sprites/tileset.png")
 	a.weapons = rl.LoadTexture("assets/sprites/weapons.png")
@@ -257,6 +308,12 @@ assets_unload :: proc(a: ^Assets) {
 	objects := [?]^Anim{&a.chest, &a.coin, &a.key, &a.rune, &a.flag}
 	unload_anims(objects[:])
 
+	for kind in Prop_Kind {
+		for i in 0 ..< a.props[kind].count {
+			rl.UnloadTexture(a.props[kind].tex[i])
+		}
+	}
+
 	rl.UnloadTexture(a.tileset)
 	rl.UnloadTexture(a.weapons)
 	for i in 0 ..< BG_LAYERS {
@@ -271,4 +328,14 @@ assets_unload :: proc(a: ^Assets) {
 
 play :: proc(a: ^Assets, s: Sfx) {
 	rl.PlaySound(a.sfx[s])
+}
+
+// One variant of a prop kind, wrapping the index so callers can roll a number
+// without knowing how many files that folder holds.
+prop_texture :: proc(a: ^Assets, kind: Prop_Kind, variant: int) -> rl.Texture2D {
+	set := a.props[kind]
+	if set.count <= 0 {
+		return {}
+	}
+	return set.tex[variant % set.count]
 }

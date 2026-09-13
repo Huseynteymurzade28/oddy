@@ -20,6 +20,9 @@ century feeding it instead.
    you have it.
 3. **Break the warden.** That is the way out.
 
+Somewhere in the middle of the map there is a **stall**. It is the only place
+coins are worth anything, and it never has enough on it to sell you everything.
+
 Dying rebuilds the whole map, so no two descents are the same.
 
 ## Controls
@@ -31,7 +34,7 @@ Dying rebuilds the whole map, so no two descents are the same.
 | `Space` against a wall | wall jump |
 | Mouse | aim |
 | Left click | shoot |
-| `E` | open a chest, again to take the gun |
+| `E` | open a chest, again to take the gun — or buy at the stall |
 | `F11` | fullscreen |
 | `R` | new run (on an end screen) |
 
@@ -40,6 +43,9 @@ Dying rebuilds the whole map, so no two descents are the same.
 - **Rolled weapons.** Chests roll a gun from a class and a rarity; deeper rooms
   tilt the rarity table upward. The starting pistol never runs out of ammo, so a
   run can never stall on an empty gun.
+- **The stall.** Three crates, three offers, one run's worth of coins — a gun,
+  and two of {a heart, a heart container, a full magazine, a trigger job}. Never
+  enough money for all three, and it does not restock, so what you skip is gone.
 - **Coyote time, jump buffering, variable jump height** — a jump pressed slightly
   early or slightly late still counts, and releasing early cuts it short.
 - **Rooms wake up.** Enemies only act while you are in their room.
@@ -69,6 +75,7 @@ would buy nothing but import cycles — so files are grouped by prefix instead, 
 | `weapon.odin` | weapon classes, rarity rolls, holding and drawing a gun |
 | `bullet.odin` | shots, impacts, muzzle flashes, sparks |
 | `chest.odin` | chests and the take-it-or-leave-it prompt |
+| `shop.odin` | the stall: what it offers, what it costs, what it does |
 | `pickup.odin` | coins, healing runes, the key |
 | `animation.odin` | sprite sheets and the animation player |
 | `assets.odin` | every file the game loads, in one place |
@@ -90,6 +97,7 @@ tile, `ROOM_W` x `ROOM_H` per block. The legend is at the top of that file:
     =  one-way platform     S  the player's starting flag
     ~  water (deadly)       K  the boss key
                             B  the boss
+                            M  the stall
 ```
 
 Spawn characters are offers, not orders — the generator decides how many of them
@@ -104,3 +112,10 @@ both side walls.
 
 See `assets/CREDITS.md`. Everything under `assets/` is loaded by `assets.odin`
 and nothing else opens a file, so moving or replacing art is a one-file change.
+
+`assets/sprites/objects/` splits two ways: `animated/` holds the sprite sheets
+that play (chest, coin, key, rune, flag), and the sibling folders are numbered
+still images used as scenery — `grass/`, `bushes/`, `stones/`, `ridges/`,
+`fence/`, `boxes/`, `trees/`, `willows/`, `ladders/`, `pointers/`. A folder is one
+`Prop_Kind`, so adding a variant means dropping in the next number and bumping
+one count in `assets.odin`.

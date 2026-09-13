@@ -95,10 +95,15 @@ draw_stats :: proc(g: ^Game) {
 	a := &g.assets
 	s := hud_scale()
 
-	for i in 0 ..< MAX_HEALTH {
+	for i in 0 ..< g.player.max_health {
 		colour := rl.Color{228, 78, 92, 255}
 		if i >= g.player.health {
 			colour = {44, 38, 54, 220}
+		}
+		// Hearts bought at the stall are tinted, so the row shows at a glance
+		// which of it came free with the run.
+		if i >= MAX_HEALTH && i < g.player.health {
+			colour = {255, 120, 150, 255}
 		}
 		draw_heart(5 + f32(i) * 10, 5, colour)
 	}
@@ -160,6 +165,13 @@ draw_prompts :: proc(g: ^Game) {
 		draw_text_centered(a, fmt.ctprintf("%s", g.notice), 40, 8, {255, 214, 110, alpha})
 	}
 
+	// The stall owns the prompt line whenever you are standing at one of its
+	// crates, so a chest in the same room can never talk over a purchase.
+	if slot := shop_slot_in_reach(g.shop, g.player); slot >= 0 {
+		draw_shop_prompt(g, g.shop.items[slot])
+		return
+	}
+
 	for c in g.chests {
 		if c.taken || !chest_in_reach(c, g.player) {
 			continue
@@ -168,37 +180,93 @@ draw_prompts :: proc(g: ^Game) {
 			draw_text_centered(a, "E   OPEN CHEST", view.y - 48, 8, {255, 214, 110, 255})
 			return
 		}
+		top := view.y - OFFER_UP
+		draw_weapon_offer(g, c.loot, top)
+		draw_text_centered(a, "E   TAKE IT", top + 36, 8, {255, 214, 110, 255})
+		return
+	}
+}
 
-		// Comparing against what you are holding is the whole decision, so the
-		// numbers sit side by side rather than being left to memory.
-		name := fmt.ctprintf("%s %s", c.loot.prefix, weapon_class_name(c.loot.class))
-		here := weapon_dps(c.loot)
-		mine := weapon_dps(g.player.weapon)
-		arrow: cstring = here > mine ? "BETTER DPS" : (here < mine ? "WORSE DPS" : "SAME DPS")
-		colour := here > mine ? rl.Color{124, 224, 140, 255} : rl.Color{228, 130, 130, 255}
+// How far above the bottom of the screen an offer panel starts. It is four lines
+// tall, and the last of them has to clear the weapon panel underneath.
+@(private = "file")
+OFFER_UP :: 88.0
 
-		y := view.y - 72
-		draw_text_centered(a, name, y, 8, RARITY_COLORS[c.loot.rarity])
+// Comparing a gun against what you are already holding is the whole decision, so
+// the numbers sit side by side rather than being left to memory. Chests and the
+// stall both show it: the choice is the same either way, only the price differs.
+@(private = "file")
+draw_weapon_offer :: proc(g: ^Game, w: Weapon, y: f32) {
+	a := &g.assets
+	here := weapon_dps(w)
+	mine := weapon_dps(g.player.weapon)
+	arrow: cstring = here > mine ? "BETTER DPS" : (here < mine ? "WORSE DPS" : "SAME DPS")
+	colour := here > mine ? rl.Color{124, 224, 140, 255} : rl.Color{228, 130, 130, 255}
+
+	draw_text_centered(
+		a,
+		fmt.ctprintf("%s %s", w.prefix, weapon_class_name(w.class)),
+		y,
+		8,
+		RARITY_COLORS[w.rarity],
+	)
+	draw_text_centered(
+		a,
+		fmt.ctprintf("%s   DPS %.0f  VS  %.0f", arrow, here, mine),
+		y + 11,
+		8,
+		colour,
+	)
+	draw_text_centered(
+		a,
+		fmt.ctprintf("%s   %v ROUNDS", RARITY_NAMES[w.rarity], w.infinite ? 0 : w.ammo),
+		y + 22,
+		8,
+		{176, 190, 214, 255},
+	)
+}
+
+@(private = "file")
+draw_shop_prompt :: proc(g: ^Game, item: Shop_Item) {
+	a := &g.assets
+	view := view_size()
+	y := view.y - OFFER_UP
+
+	if item.kind == .Weapon {
+		draw_weapon_offer(g, item.loot, y)
+	} else {
+		draw_text_centered(a, fmt.ctprintf("%s", shop_item_name(item)), y, 8, SHOP_COLORS[item.kind])
 		draw_text_centered(
 			a,
-			fmt.ctprintf("%s   DPS %.0f  VS  %.0f", arrow, here, mine),
+			fmt.ctprintf("%s", shop_item_detail(item)),
 			y + 11,
-			8,
-			colour,
-		)
-		draw_text_centered(
-			a,
-			fmt.ctprintf(
-				"%s   %v ROUNDS",
-				RARITY_NAMES[c.loot.rarity],
-				c.loot.infinite ? 0 : c.loot.ammo,
-			),
-			y + 22,
 			8,
 			{176, 190, 214, 255},
 		)
-		draw_text_centered(a, "E   TAKE IT", y + 36, 8, {255, 214, 110, 255})
+	}
+
+	// Saying why it cannot be bought is worth more than a price you would waste.
+	if reason, useless := shop_item_useless(item, g.player); useless {
+		draw_text_centered(a, fmt.ctprintf("%s", reason), y + 36, 8, {150, 160, 186, 255})
 		return
+	}
+
+	if g.player.coins >= item.price {
+		draw_text_centered(
+			a,
+			fmt.ctprintf("E   BUY   %v COINS", item.price),
+			y + 36,
+			8,
+			{255, 214, 110, 255},
+		)
+	} else {
+		draw_text_centered(
+			a,
+			fmt.ctprintf("%v COINS - YOU HAVE %v", item.price, g.player.coins),
+			y + 36,
+			8,
+			{228, 130, 130, 255},
+		)
 	}
 }
 
