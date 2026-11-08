@@ -1,6 +1,6 @@
 package game
 
-import rl "vendor:raylib"
+import rl "../libs/raylib"
 
 /*
 The shape of a run: a grid of rooms, which of them are connected, and what each
@@ -54,6 +54,7 @@ Room :: struct {
 	role:  Room_Role,
 	doors: Dirs,
 	depth: int, // rooms travelled from the start, used to ramp difficulty
+	zone:  Zone, // how deep it feels; see `zone.odin`
 	seen:  bool, // has the player been here? drives the minimap
 }
 
@@ -62,10 +63,14 @@ World :: struct {
 	start: [2]int, // grid coordinates, {x, y}
 	boss:  [2]int,
 	gates: [dynamic][2]int, // tile coordinates cleared when the key is taken
+	// The same doorways again: they shut behind you once you are in the vault,
+	// and open when what lives there dies.
+	boss_doors: [dynamic][2]int,
 }
 
 world_destroy :: proc(w: ^World) {
 	delete(w.gates)
+	delete(w.boss_doors)
 	w^ = {}
 }
 

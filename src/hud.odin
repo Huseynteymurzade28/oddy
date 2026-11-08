@@ -2,16 +2,19 @@ package game
 
 import "core:fmt"
 import "core:math"
-import rl "vendor:raylib"
+import rl "../libs/raylib"
 
 /*
 The overlay drawn on top of the world. Everything here is laid out in the same
 virtual 240px-tall space as the world and scaled up to the window, so text stays
 pixel-crisp at any size.
 
-This file holds the drawing helpers the rest of the HUD shares, plus the part
-that is always on screen while playing. The map lives in `hud_minimap.odin` and
-the full-screen cards in `hud_screens.odin`.
+It is kept to the top edge on purpose: on a phone both bottom corners belong to
+thumbs. Top left is you (hearts, coins, the gun); top right is the map. Anything
+else — what to do next, the warden's health — only shows while it matters.
+
+The map lives in `hud_minimap.odin`, the full-screen cards in
+`hud_screens.odin`, and the on-screen buttons in `hud_touch.odin`.
 */
 
 // ------------------------------------------------------------------ helpers ---
@@ -25,6 +28,14 @@ draw_text :: proc(a: ^Assets, text: cstring, pos: rl.Vector2, size: f32, color: 
 	rl.DrawTextEx(a.font, text, pos * s, size * s, s, color)
 }
 
+// The same text with a one-pixel drop shadow, for anything that floats over the
+// world without a panel behind it.
+draw_text_shadow :: proc(a: ^Assets, text: cstring, pos: rl.Vector2, size: f32, color: rl.Color) {
+	shadow := rl.Color{8, 6, 14, color.a / 4 * 3}
+	draw_text(a, text, pos + {0, 1}, size, shadow)
+	draw_text(a, text, pos, size, color)
+}
+
 text_width :: proc(a: ^Assets, text: cstring, size: f32) -> f32 {
 	s := hud_scale()
 	return rl.MeasureTextEx(a.font, text, size * s, s).x / s
@@ -32,12 +43,11 @@ text_width :: proc(a: ^Assets, text: cstring, size: f32) -> f32 {
 
 draw_text_centered :: proc(a: ^Assets, text: cstring, y, size: f32, color: rl.Color) {
 	view := view_size()
-	draw_text(a, text, {(view.x - text_width(a, text, size)) / 2, y}, size, color)
+	draw_text_shadow(a, text, {(view.x - text_width(a, text, size)) / 2, y}, size, color)
 }
 
-// Right-aligned to `right`, used by everything hanging off the map panel.
 draw_text_right :: proc(a: ^Assets, text: cstring, right, y, size: f32, color: rl.Color) {
-	draw_text(a, text, {right - text_width(a, text, size), y}, size, color)
+	draw_text_shadow(a, text, {right - text_width(a, text, size), y}, size, color)
 }
 
 fill_rect :: proc(x, y, w, h: f32, color: rl.Color) {
@@ -53,6 +63,16 @@ outline_rect :: proc(x, y, w, h: f32, color: rl.Color) {
 	fill_rect(x + w, y, 1, h, color)
 }
 
+fill_circle :: proc(c: rl.Vector2, r: f32, color: rl.Color) {
+	s := hud_scale()
+	rl.DrawCircleV(c * s, r * s, color)
+}
+
+ring :: proc(c: rl.Vector2, r, thickness: f32, color: rl.Color) {
+	s := hud_scale()
+	rl.DrawRing(c * s, (r - thickness) * s, r * s, 0, 360, 40, color)
+}
+
 draw_dim :: proc(alpha: u8) {
 	rl.DrawRectangle(0, 0, rl.GetScreenWidth(), rl.GetScreenHeight(), {12, 10, 20, alpha})
 }
@@ -62,8 +82,17 @@ format_time :: proc(seconds: f32) -> string {
 	return fmt.tprintf("%02d:%02d", total / 60, total % 60)
 }
 
+// A prompt for something you do with the interact key. On a phone the button
+// itself says what it is, so the line drops the key name.
+action_label :: proc(text: string) -> cstring {
+	when TOUCH_CONTROLS {
+		return fmt.ctprintf("%s", text)
+	} else {
+		return fmt.ctprintf("E   %s", text)
+	}
+}
+
 // A 7px heart, drawn rather than loaded: the sprite pack has no health icon.
-@(private = "file")
 draw_heart :: proc(x, y: f32, color: rl.Color) {
 	s := hud_scale()
 	p :: proc(x, y, s: f32) -> rl.Vector2 {return {x * s, y * s}}
@@ -81,76 +110,100 @@ hud_draw :: proc(g: ^Game) {
 	case .Playing:
 		draw_stats(g)
 		draw_minimap(g)
+		draw_boss_bar(g)
 		draw_prompts(g)
-		draw_crosshair(g)
-	case .Dead, .Won:
+		when TOUCH_CONTROLS {
+			draw_touch_controls(g)
+			draw_pause_button(g)
+		} else {
+			draw_crosshair(g)
+		}
+	case .Paused:
 		draw_stats(g)
 		draw_minimap(g)
+		draw_pause_screen(g)
+	case .Dead, .Won:
 		draw_end_screen(g)
 	}
 }
 
+// Hearts, then coins and the key, then the gun: one compact block in the corner.
 @(private = "file")
 draw_stats :: proc(g: ^Game) {
 	a := &g.assets
 	s := hud_scale()
+	p := &g.player
 
-	for i in 0 ..< g.player.max_health {
+	// A heart that was just lost pops, so a hit is felt even mid-fight.
+	for i in 0 ..< p.max_health {
 		colour := rl.Color{228, 78, 92, 255}
-		if i >= g.player.health {
-			colour = {44, 38, 54, 220}
+		if i >= p.health {
+			colour = {44, 38, 54, 200}
 		}
-		// Hearts bought at the stall are tinted, so the row shows at a glance
-		// which of it came free with the run.
-		if i >= MAX_HEALTH && i < g.player.health {
+		if i >= MAX_HEALTH && i < p.health {
 			colour = {255, 120, 150, 255}
 		}
-		draw_heart(5 + f32(i) * 10, 5, colour)
+		x := 6 + f32(i) * 10
+		draw_heart(x, 7, {8, 6, 14, 150})
+		draw_heart(x, 6, colour)
 	}
 
-	// Coin counter, using the animated coin sprite as its icon.
+	y: f32 = 17
 	coin_frame := int(g.time / max(a.coin.frame_time, 0.01)) % max(a.coin.count, 1)
-	anim_draw_frame(&a.coin, coin_frame, {8 * s, 24 * s}, false, rl.WHITE, s)
-	draw_text(a, fmt.ctprintf("%v", g.player.coins), {15, 17}, 8, rl.RAYWHITE)
+	anim_draw_frame(&a.coin, coin_frame, {10 * s, (y + 9) * s}, false, rl.WHITE, s)
+	draw_text_shadow(a, fmt.ctprintf("%v", p.coins), {17, y}, 8, rl.RAYWHITE)
 
-	if g.player.has_key {
+	if p.has_key {
 		key_frame := int(g.time / max(a.key.frame_time, 0.01)) % max(a.key.count, 1)
-		anim_draw_frame(&a.key, key_frame, {40 * s, 24 * s}, false, rl.WHITE, s)
+		kx := 24 + text_width(a, fmt.ctprintf("%v", p.coins), 8)
+		anim_draw_frame(&a.key, key_frame, {kx * s, (y + 8) * s}, false, rl.WHITE, s)
 	}
 
-	draw_weapon_panel(g)
+	// The gun: its sprite, and a thin bar for what is left in it. The name is
+	// announced once when you pick it up; after that the colour says enough.
+	w := p.weapon
+	y += 12
+	colour := RARITY_COLORS[w.rarity]
+	weapon_draw_flat(w, a, {19 * s, (y + 7) * s}, 0.85 * s)
+	fill_rect(6, y + 14, 26, 1, colour)
+	if !w.infinite {
+		frac := f32(w.ammo) / f32(max(w.ammo_max, 1))
+		bar := frac < 0.25 ? rl.Color{228, 92, 92, 255} : rl.Color{236, 214, 130, 255}
+		fill_rect(6, y + 14, 26 * frac, 1, bar)
+		draw_text_shadow(a, fmt.ctprintf("%v", w.ammo), {36, y + 3}, 8, {200, 206, 220, 255})
+	}
 }
 
+// The warden's name and health across the top, once the vault has shut behind
+// you. During the introduction the name is shown big instead.
 @(private = "file")
-draw_weapon_panel :: proc(g: ^Game) {
+draw_boss_bar :: proc(g: ^Game) {
 	a := &g.assets
-	w := g.player.weapon
+	b, ok := boss_status(g)
+	if !ok {
+		return
+	}
 	view := view_size()
-	s := hud_scale()
 
-	name := fmt.ctprintf("%s %s", w.prefix, weapon_class_name(w.class))
-	panel_w := max(f32(120), text_width(a, name, 8) + 44)
-	x: f32 = 5
-	y := view.y - 32
+	if g.boss_intro > 0 {
+		t := g.boss_intro
+		alpha := u8(clamp(min(t, BOSS_INTRO_TIME - t) * 3, 0, 1) * 255)
+		gold := rl.Color{255, 214, 110, alpha}
+		draw_text_centered(a, b.title, 70, 16, gold)
+		draw_text_centered(a, b.epithet, 92, 8, {206, 190, 230, alpha})
+		return
+	}
 
-	fill_rect(x, y, panel_w, 27, {14, 12, 22, 180})
-	fill_rect(x, y, panel_w, 1, RARITY_COLORS[w.rarity])
-
-	weapon_draw_flat(w, a, {(x + 18) * s, (y + 10) * s}, 0.62 * s)
-	draw_text(a, name, {x + 34, y + 4}, 8, RARITY_COLORS[w.rarity])
-
-	if w.infinite {
-		draw_text(a, "UNLIMITED", {x + 34, y + 16}, 8, {150, 160, 186, 255})
-	} else {
-		draw_text(a, fmt.ctprintf("%v / %v", w.ammo, w.ammo_max), {x + 34, y + 16}, 8, rl.RAYWHITE)
-		// Ammo bar along the bottom edge of the panel.
-		frac := f32(w.ammo) / f32(max(w.ammo_max, 1))
-		fill_rect(x, y + 26, panel_w, 1, {40, 36, 52, 255})
-		bar := rl.Color{236, 214, 130, 255}
-		if frac < 0.25 {
-			bar = {228, 92, 92, 255}
-		}
-		fill_rect(x, y + 26, panel_w * frac, 1, bar)
+	width := min(view.x * 0.5, 200)
+	x := (view.x - width) / 2
+	y: f32 = 16
+	draw_text_centered(a, b.title, 5, 8, {230, 220, 240, 255})
+	fill_rect(x - 1, y - 1, width + 2, 5, {8, 6, 14, 200})
+	fill_rect(x, y, width * clamp(b.frac_lag, 0, 1), 3, {255, 236, 200, 255})
+	fill_rect(x, y, width * clamp(b.frac, 0, 1), 3, b.colour)
+	// Where the second phase starts, so the fight has a visible halfway mark.
+	if b.phase_mark > 0 {
+		fill_rect(x + width * b.phase_mark, y - 1, 1, 5, {8, 6, 14, 255})
 	}
 }
 
@@ -162,7 +215,7 @@ draw_prompts :: proc(g: ^Game) {
 
 	if g.notice_timer > 0 && len(g.notice) > 0 {
 		alpha := u8(clamp(g.notice_timer, 0, 1) * 255)
-		draw_text_centered(a, fmt.ctprintf("%s", g.notice), 40, 8, {255, 214, 110, alpha})
+		draw_text_centered(a, fmt.ctprintf("%s", g.notice), 44, 8, {255, 214, 110, alpha})
 	}
 
 	// The stall owns the prompt line whenever you are standing at one of its
@@ -177,44 +230,38 @@ draw_prompts :: proc(g: ^Game) {
 			continue
 		}
 		if !c.opened {
-			draw_text_centered(a, "E   OPEN CHEST", view.y - 48, 8, {255, 214, 110, 255})
+			draw_text_centered(a, action_label("OPEN"), view.y - 58, 8, {255, 214, 110, 255})
 			return
 		}
 		top := offer_top(g, chest_loot_pos(c) - {0, 10})
 		draw_weapon_offer(g, c.loot, top)
-		draw_text_centered(a, "E   TAKE IT", top + 36, 8, {255, 214, 110, 255})
+		draw_text_centered(a, action_label("TAKE IT"), top + 36, 8, {255, 214, 110, 255})
 		return
 	}
 }
 
-// How far above the bottom of the screen an offer panel may start at the lowest.
-// It is four lines tall, and the last of them has to clear the weapon panel
-// underneath.
 @(private = "file")
-OFFER_UP :: 88.0
+OFFER_UP :: 96.0
 @(private = "file")
 OFFER_H :: 44.0
 
 // Where an offer panel starts: just above the thing on offer, so the words never
-// sit on top of the gun or the stall they are describing. `anchor` is the top of
-// that thing in world space. A chest on the floor puts its loot exactly where a
-// bottom-anchored panel would land, which is why this follows the object.
+// sit on top of the gun or the stall they are describing.
 @(private = "file")
 offer_top :: proc(g: ^Game, anchor: rl.Vector2) -> f32 {
 	view := view_size()
 	screen_y := anchor.y - g.camera.target.y + view.y / 2
-	return clamp(screen_y - OFFER_H - 6, 8, view.y - OFFER_UP)
+	return clamp(screen_y - OFFER_H - 6, 46, view.y - OFFER_UP)
 }
 
 // Comparing a gun against what you are already holding is the whole decision, so
-// the numbers sit side by side rather than being left to memory. Chests and the
-// stall both show it: the choice is the same either way, only the price differs.
+// the numbers sit side by side rather than being left to memory.
 @(private = "file")
 draw_weapon_offer :: proc(g: ^Game, w: Weapon, y: f32) {
 	a := &g.assets
 	here := weapon_dps(w)
 	mine := weapon_dps(g.player.weapon)
-	arrow: cstring = here > mine ? "BETTER DPS" : (here < mine ? "WORSE DPS" : "SAME DPS")
+	arrow: cstring = here > mine ? "BETTER" : (here < mine ? "WORSE" : "SAME")
 	colour := here > mine ? rl.Color{124, 224, 140, 255} : rl.Color{228, 130, 130, 255}
 
 	draw_text_centered(
@@ -224,13 +271,7 @@ draw_weapon_offer :: proc(g: ^Game, w: Weapon, y: f32) {
 		8,
 		RARITY_COLORS[w.rarity],
 	)
-	draw_text_centered(
-		a,
-		fmt.ctprintf("%s   DPS %.0f  VS  %.0f", arrow, here, mine),
-		y + 11,
-		8,
-		colour,
-	)
+	draw_text_centered(a, fmt.ctprintf("%s   %.0f DPS  VS  %.0f", arrow, here, mine), y + 11, 8, colour)
 	draw_text_centered(
 		a,
 		fmt.ctprintf("%s   %v ROUNDS", RARITY_NAMES[w.rarity], w.infinite ? 0 : w.ammo),
@@ -249,16 +290,9 @@ draw_shop_prompt :: proc(g: ^Game, item: Shop_Item) {
 		draw_weapon_offer(g, item.loot, y)
 	} else {
 		draw_text_centered(a, fmt.ctprintf("%s", shop_item_name(item)), y, 8, SHOP_COLORS[item.kind])
-		draw_text_centered(
-			a,
-			fmt.ctprintf("%s", shop_item_detail(item)),
-			y + 11,
-			8,
-			{176, 190, 214, 255},
-		)
+		draw_text_centered(a, fmt.ctprintf("%s", shop_item_detail(item)), y + 11, 8, {176, 190, 214, 255})
 	}
 
-	// Saying why it cannot be bought is worth more than a price you would waste.
 	if reason, useless := shop_item_useless(item, g.player); useless {
 		draw_text_centered(a, fmt.ctprintf("%s", reason), y + 36, 8, {150, 160, 186, 255})
 		return
@@ -267,7 +301,7 @@ draw_shop_prompt :: proc(g: ^Game, item: Shop_Item) {
 	if g.player.coins >= item.price {
 		draw_text_centered(
 			a,
-			fmt.ctprintf("E   BUY   %v COINS", item.price),
+			action_label(fmt.tprintf("BUY   %v COINS", item.price)),
 			y + 36,
 			8,
 			{255, 214, 110, 255},

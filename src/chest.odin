@@ -1,7 +1,7 @@
 package game
 
 import "core:math"
-import rl "vendor:raylib"
+import rl "../libs/raylib"
 
 /*
 A chest is the only way to change weapons. Opening one rolls a gun on the spot,

@@ -2,7 +2,7 @@ package game
 
 import "core:math"
 import "core:math/rand"
-import rl "vendor:raylib"
+import rl "../libs/raylib"
 
 /*
 Every shot is a sprite from `assets/sprites/bullets/`, sitting on a soft additive
@@ -80,6 +80,9 @@ Bullet :: struct {
 	from_player: bool,
 	last_hit:    int, // enemy index this shot already passed through
 	dead:        bool,
+	gravity:     f32, // lobbed globs and falling rocks arc; everything else flies straight
+	delay:       f32, // a rock shivers on the ceiling this long before it drops
+	size:        f32, // drawn radius of the glow; enemy shots are chunkier
 }
 
 // A one-shot run through part of a bullet strip: muzzle flashes and impacts.
@@ -185,18 +188,29 @@ weapon_fire :: proc(g: ^Game, w: ^Weapon, origin: rl.Vector2, angle: f32) {
 	play(&g.assets, .Shoot)
 }
 
-enemy_fire :: proc(g: ^Game, origin, vel: rl.Vector2, damage, life: f32, tint: rl.Color) {
+enemy_fire :: proc(
+	g: ^Game,
+	origin, vel: rl.Vector2,
+	damage, life: f32,
+	tint: rl.Color,
+	gravity: f32 = 0,
+	delay: f32 = 0,
+	size: f32 = 2.4,
+) {
 	append(
 		&g.bullets,
 		Bullet {
 			pos = origin,
 			vel = vel,
 			damage = damage,
-			life = life,
+			life = life + delay,
 			art = .Shotgun,
 			tint = tint,
 			from_player = false,
 			last_hit = -1,
+			gravity = gravity,
+			delay = delay,
+			size = size,
 		},
 	)
 }
@@ -246,6 +260,11 @@ bullets_update :: proc(g: ^Game, dt: f32) {
 			continue
 		}
 		b.life -= dt
+		if b.delay > 0 {
+			b.delay -= dt
+			continue
+		}
+		b.vel.y += b.gravity * dt
 		b.pos += b.vel * dt
 		if b.life <= 0 {
 			b.dead = true
@@ -357,10 +376,16 @@ shots_draw :: proc(g: ^Game) {
 
 	rl.BeginBlendMode(.ADDITIVE)
 	for b in g.bullets {
-		trail := b.tint
-		trail.a = 70
-		rl.DrawLineV(b.pos - b.vel * 0.02, b.pos, trail)
-		draw_glow(b.pos, b.explosive ? BULLET_RADIUS * 1.7 : BULLET_RADIUS, b.tint)
+		if b.from_player {
+			trail := b.tint
+			trail.a = 70
+			rl.DrawLineV(b.pos - b.vel * 0.02, b.pos, trail)
+		}
+		radius: f32 = b.explosive ? BULLET_RADIUS * 1.7 : BULLET_RADIUS
+		if !b.from_player {
+			radius = b.size
+		}
+		draw_glow(b.pos, radius, b.tint)
 	}
 	for s in g.sparks {
 		t := s.life / s.max_life
@@ -373,7 +398,26 @@ shots_draw :: proc(g: ^Game) {
 	// Cells are drawn from their centre, so the round is pushed back along its
 	// heading to put its nose — rather than the middle of its trail — on the
 	// point that actually collides.
+	// Enemy shots are solid orbs with a bright core: they have to read as
+	// "dodge this" against everything else, and a rock on the ceiling shivers
+	// before it falls.
 	for b in g.bullets {
+		if b.from_player {
+			continue
+		}
+		pos := b.pos
+		if b.delay > 0 {
+			pos.x += math.sin(g.time * 60 + b.pos.x) * 0.8
+		}
+		rl.DrawCircleV(pos, b.size, b.tint)
+		core := rl.Color{255, 250, 235, 230}
+		rl.DrawCircleV(pos - {b.size * 0.25, b.size * 0.25}, b.size * 0.45, core)
+	}
+
+	for b in g.bullets {
+		if !b.from_player {
+			continue
+		}
 		info := BULLET_ART[b.art]
 		sheet := &a.bullets[b.art]
 		heading := math.atan2(b.vel.y, b.vel.x)

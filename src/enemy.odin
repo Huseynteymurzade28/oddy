@@ -2,13 +2,13 @@ package game
 
 import "core:math"
 import "core:math/rand"
-import rl "vendor:raylib"
+import rl "../libs/raylib"
 
 /*
 Two kinds of creature share this file. Walkers patrol a ledge until they notice
 you, then close in and lunge. Flyers ignore the terrain and steer straight at
-you. The golem is a walker with an armour phase on top, and a slam that throws
-shockwaves along the floor once the armour is off.
+you. The three bosses are creatures too — they take damage, die and collide the
+same way — but they think in `boss.odin`.
 */
 
 Enemy_Kind :: enum u8 {
@@ -18,7 +18,10 @@ Enemy_Kind :: enum u8 {
 	Crab,
 	Skull,
 	Pebble,
+	// The bosses. One of them guards the vault each run.
 	Golem,
+	Brood,
+	Ooze,
 }
 
 Enemy_State :: enum u8 {
@@ -48,8 +51,8 @@ TRAITS := [Enemy_Kind]Enemy_Traits {
 	.Rat = {
 		health = 14,
 		speed = 76,
-		width = 14,
-		height = 11,
+		width = 22,
+		height = 20,
 		sight = 155,
 		reach = 20,
 		attack_cd = 1.1,
@@ -60,8 +63,8 @@ TRAITS := [Enemy_Kind]Enemy_Traits {
 	.Slime = {
 		health = 26,
 		speed = 38,
-		width = 18,
-		height = 17,
+		width = 30,
+		height = 18,
 		sight = 135,
 		reach = 26,
 		attack_cd = 1.5,
@@ -73,8 +76,8 @@ TRAITS := [Enemy_Kind]Enemy_Traits {
 		health = 12,
 		speed = 68,
 		flies = true,
-		width = 14,
-		height = 15,
+		width = 22,
+		height = 16,
 		sight = 190,
 		reach = 24,
 		attack_cd = 1.3,
@@ -85,8 +88,8 @@ TRAITS := [Enemy_Kind]Enemy_Traits {
 	.Crab = {
 		health = 42,
 		speed = 46,
-		width = 20,
-		height = 13,
+		width = 36,
+		height = 24,
 		sight = 150,
 		reach = 24,
 		attack_cd = 1.5,
@@ -98,8 +101,8 @@ TRAITS := [Enemy_Kind]Enemy_Traits {
 		health = 10,
 		speed = 54,
 		flies = true,
-		width = 9,
-		height = 12,
+		width = 20,
+		height = 22,
 		sight = 210,
 		reach = 18,
 		attack_cd = 1.0,
@@ -111,8 +114,8 @@ TRAITS := [Enemy_Kind]Enemy_Traits {
 		health = 30,
 		speed = 86,
 		flies = true,
-		width = 11,
-		height = 12,
+		width = 18,
+		height = 20,
 		sight = 175,
 		reach = 20,
 		attack_cd = 1.8,
@@ -121,16 +124,41 @@ TRAITS := [Enemy_Kind]Enemy_Traits {
 		tint = {168, 176, 200, 255},
 	},
 	.Golem = {
-		health = 320,
-		speed = 44,
-		width = 24,
-		height = 26,
-		sight = 460,
-		reach = 34,
-		attack_cd = 1.5,
+		health = 440,
+		speed = 46,
+		width = 34,
+		height = 36,
+		sight = 600,
+		reach = 40,
+		attack_cd = 1.4,
 		lunge = 220,
-		scale = 1.5,
+		scale = 1.3,
 		tint = {150, 214, 120, 255},
+	},
+	.Brood = {
+		health = 320,
+		speed = 74,
+		flies = true,
+		width = 40,
+		height = 26,
+		sight = 600,
+		reach = 30,
+		attack_cd = 1.2,
+		lunge = 200,
+		scale = 1.4,
+		tint = {198, 118, 236, 255},
+	},
+	.Ooze = {
+		health = 400,
+		speed = 52,
+		width = 46,
+		height = 34,
+		sight = 600,
+		reach = 40,
+		attack_cd = 1.3,
+		lunge = 160,
+		scale = 1.6,
+		tint = {126, 232, 140, 255},
 	},
 }
 
@@ -161,8 +189,17 @@ Enemy :: struct {
 	corpse:     f32,
 	swung:      bool, // the current swing has already connected
 	armoured:   bool, // golem only
-	slams:      int, // golem only: every third attack is the ranged one
 	anim:       Animator,
+
+	// Bosses only; see `boss.odin`.
+	phase:      int,
+	act:        Boss_Act,
+	queued:     Boss_Act, // what a wind-up turns into
+	act_t:      f32,
+	next_act:   f32, // until the next special move
+	target:     rl.Vector2,
+	count:      int,
+	lag:        f32, // the health bar's trailing edge
 }
 
 enemy_flies :: proc(kind: Enemy_Kind) -> bool {
@@ -181,6 +218,9 @@ enemy_make :: proc(kind: Enemy_Kind, spawn: rl.Vector2) -> Enemy {
 		alive = true,
 		armoured = kind == .Golem,
 		bob = rand.float32_range(0, math.TAU),
+		phase = 1,
+		lag = 1,
+		next_act = 2.5,
 	}
 }
 
@@ -193,16 +233,20 @@ enemy_centre :: proc(e: Enemy) -> rl.Vector2 {
 	return {e.pos.x, e.pos.y - TRAITS[e.kind].height / 2}
 }
 
-// The golem swaps its whole animation set when its armour comes off.
-@(private = "file")
+// The golem swaps its whole animation set when its armour comes off. The other
+// two bosses are the bat and the slime grown huge, so they borrow their sheets.
 anims_for :: proc(a: ^Assets, e: Enemy) -> ^Creature_Anims {
-	if e.kind == .Golem {
+	#partial switch e.kind {
+	case .Golem:
 		return e.armoured ? &a.golem.armor : &a.golem.broken
+	case .Brood:
+		return &a.enemy[.Bat]
+	case .Ooze:
+		return &a.enemy[.Slime]
 	}
 	return &a.enemy[e.kind]
 }
 
-@(private = "file")
 approach_f32 :: proc(current, target, delta: f32) -> f32 {
 	return current < target ? min(current + delta, target) : max(current - delta, target)
 }
@@ -237,11 +281,18 @@ enemy_damage :: proc(g: ^Game, index: int, amount: f32, push: rl.Vector2) {
 	}
 	if e.kind == .Golem && e.armoured && e.health <= e.max_health * GOLEM_BREAK_AT {
 		e.state = .Shatter
+		e.act = .None
 		e.timer = 0
 		animator_restart(&e.anim, &g.assets.golem.armor.death)
 		spawn_burst(g, enemy_centre(e^), {200, 210, 220, 255}, 26, 220, 2.0)
 		g.shake = max(g.shake, 8)
 		play(&g.assets, .Explode)
+		return
+	}
+	// A boss flinches (the flash) but is never knocked out of what it is doing:
+	// its attacks are the fight, and interrupting them would make it a target.
+	if is_boss(e.kind) {
+		play(&g.assets, .Hurt)
 		return
 	}
 	if e.state != .Attack && e.stagger_cd <= 0 {
@@ -267,18 +318,14 @@ enemy_die :: proc(g: ^Game, index: int) {
 	spawn_burst(g, enemy_centre(e^), t.tint, 14, 190, 1.6)
 	g.player.kills += 1
 
-	if e.kind == .Golem {
-		g.shake = max(g.shake, 12)
-		e.corpse = 3.0
-		g.boss_down = true
-		spawn_burst(g, enemy_centre(e^), {255, 220, 140, 255}, 40, 260, 2.4)
+	if is_boss(e.kind) {
+		boss_die(g, index)
 	}
 	play(&g.assets, .Explode)
 }
 
 // ----------------------------------------------------------------- movement ---
 
-@(private = "file")
 walk_terrain :: proc(g: ^Game, e: ^Enemy, dt: f32, chasing: bool) {
 	m := &g.map_tiles
 	t := TRAITS[e.kind]
@@ -319,7 +366,6 @@ walk_terrain :: proc(g: ^Game, e: ^Enemy, dt: f32, chasing: bool) {
 	}
 }
 
-@(private = "file")
 fly_toward :: proc(e: ^Enemy, target: rl.Vector2, speed, accel, dt: f32) {
 	to := target - e.pos
 	if rl.Vector2LengthSqr(to) > 1 {
@@ -371,6 +417,11 @@ enemy_update :: proc(g: ^Game, index: int, dt: f32) {
 		return
 	}
 
+	if is_boss(e.kind) {
+		boss_update(g, index, dt)
+		return
+	}
+
 	to_player := player_centre(g.player) - enemy_centre(e^)
 	distance := rl.Vector2Length(to_player)
 	awake := !g.player.dead && distance < t.sight
@@ -390,16 +441,6 @@ enemy_update :: proc(g: ^Game, index: int, dt: f32) {
 		}
 
 	case .Shatter:
-		// Untouchable while the armour comes apart, then it gets up angrier.
-		e.vel.x = 0
-		walk_terrain(g, e, dt, false)
-		if e.anim.finished {
-			e.armoured = false
-			e.state = .Chase
-			e.attack_cd = 0.6
-			animator_restart(&e.anim, &a.golem.broken.idle)
-		}
-
 	case .Idle:
 		if awake {
 			e.state = .Chase
@@ -425,12 +466,7 @@ enemy_update :: proc(g: ^Game, index: int, dt: f32) {
 			e.timer = 0
 			e.swung = false
 			e.attack_cd = t.attack_cd
-			if e.kind == .Golem && !e.armoured {
-				e.slams += 1
-				animator_restart(&e.anim, e.slams % 3 == 0 ? &a.golem.slam : &anims.attack)
-			} else {
-				animator_restart(&e.anim, &anims.attack)
-			}
+			animator_restart(&e.anim, &anims.attack)
 			break
 		}
 		if t.flies {
@@ -476,7 +512,6 @@ enemy_update :: proc(g: ^Game, index: int, dt: f32) {
 // Walkers that end up in water — knocked in by a shot, or lunging off a ledge —
 // have had their health zeroed by `walk_terrain`; this is where that becomes a
 // death rather than a creature wandering around with an empty health bar.
-@(private = "file")
 enemy_check_drowned :: proc(g: ^Game, index: int) {
 	e := &g.enemies[index]
 	if e.alive && e.health <= 0 {
@@ -489,25 +524,6 @@ enemy_check_drowned :: proc(g: ^Game, index: int) {
 enemy_strike :: proc(g: ^Game, index: int) {
 	e := &g.enemies[index]
 	t := TRAITS[e.kind]
-
-	if e.kind == .Golem && !e.armoured && e.slams % 3 == 0 {
-		// Two shockwaves crawl outward along the ground, so the arena has to be
-		// crossed rather than camped in.
-		g.shake = max(g.shake, 9)
-		play(&g.assets, .Explode)
-		for dir in ([?]f32{-1, 1}) {
-			enemy_fire(
-				g,
-				{e.pos.x + dir * 14, e.pos.y - 6},
-				{dir * 150, 0},
-				1,
-				3.0,
-				{255, 176, 90, 255},
-			)
-		}
-		spawn_burst(g, {e.pos.x, e.pos.y - 4}, {255, 200, 120, 255}, 14, 170, 1.8)
-		return
-	}
 
 	e.vel.x = e.dir * t.lunge
 	if !t.flies {
@@ -540,7 +556,7 @@ enemy_draw :: proc(e: Enemy, a: ^Assets) {
 		pos.y += math.sin(e.bob * 3) * 1.5
 	}
 
-	tint := rl.WHITE
+	tint := is_boss(e.kind) ? boss_tint(e) : rl.WHITE
 	if !e.alive {
 		tint.a = u8(clamp(e.corpse / CORPSE_TIME, 0, 1) * 255)
 	} else if e.hurt > 0 {
@@ -552,7 +568,7 @@ enemy_draw :: proc(e: Enemy, a: ^Assets) {
 
 // A slim health bar, only over things tough enough to need one.
 enemy_draw_health :: proc(e: Enemy) {
-	if !e.alive || e.health >= e.max_health || e.max_health < 30 {
+	if !e.alive || e.health >= e.max_health || e.max_health < 30 || is_boss(e.kind) {
 		return
 	}
 	t := TRAITS[e.kind]
@@ -562,8 +578,5 @@ enemy_draw_health :: proc(e: Enemy) {
 	rl.DrawRectangleV({x, y}, {width, 2}, {20, 16, 24, 200})
 
 	colour := rl.Color{226, 96, 96, 255}
-	if e.kind == .Golem && e.armoured {
-		colour = {190, 200, 216, 255}
-	}
 	rl.DrawRectangleV({x, y}, {width * clamp(e.health / e.max_health, 0, 1), 2}, colour)
 }

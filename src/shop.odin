@@ -2,7 +2,7 @@ package game
 
 import "core:math"
 import "core:math/rand"
-import rl "vendor:raylib"
+import rl "../libs/raylib"
 
 /*
 One stall per run, in a room of its own. Three crates on the floor, one thing

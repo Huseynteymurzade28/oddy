@@ -1,7 +1,7 @@
 package game
 
 import "core:math"
-import rl "vendor:raylib"
+import rl "../libs/raylib"
 
 Pickup_Kind :: enum u8 {
 	Coin, // score

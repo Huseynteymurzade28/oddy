@@ -1,2 +1,4 @@
 oddy
 *.bin
+/build/
+/libs/raylib/*/libraylib.a

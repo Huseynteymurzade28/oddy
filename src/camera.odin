@@ -1,7 +1,7 @@
 package game
 
 import "core:math"
-import rl "vendor:raylib"
+import rl "../libs/raylib"
 
 /*
 Everything that decides what the screen shows: the fixed virtual resolution, the
@@ -71,9 +71,9 @@ camera_update :: proc(g: ^Game, dt: f32) {
 
 // Everything is underground, so the far edges of the view fall off into dark.
 draw_vignette :: proc(g: ^Game, view: rl.Rectangle) {
-	edge := rl.Color{10, 8, 16, 120}
+	edge := rl.Color{10, 8, 16, 55}
 	clear := rl.Color{10, 8, 16, 0}
-	band := view.height * 0.22
+	band := view.height * 0.16
 	rl.DrawRectangleGradientV(i32(view.x), i32(view.y), i32(view.width), i32(band), edge, clear)
 	rl.DrawRectangleGradientV(
 		i32(view.x),
@@ -93,6 +93,14 @@ draw_background :: proc(g: ^Game) {
 	s := f32(rl.GetScreenHeight()) / PIXEL_HEIGHT
 	layer_w: f32 = PIXEL_HEIGHT * 16 / 9
 
+	// The forest behind the rock takes on the colour of the zone, easing over
+	// as you cross into a room of another one.
+	want := ZONE_LOOKS[zone_at(&g.world, g.player.pos)].background
+	if g.bg_tint.a == 0 {
+		g.bg_tint = want
+	}
+	g.bg_tint = lerp_color(g.bg_tint, want, min(1, rl.GetFrameTime() * 3))
+
 	for i in 0 ..< BG_LAYERS {
 		tex := g.assets.layers[i]
 		if tex.id == 0 {
@@ -110,8 +118,8 @@ draw_background :: proc(g: ^Game) {
 		drift := clamp(-g.camera.target.y * factor * 0.22, -PIXEL_HEIGHT * 0.4, 0)
 		oy := -(height - PIXEL_HEIGHT) / 2 + drift
 
-		shade := u8(118 - depth * 74)
-		tint := rl.Color{shade, u8(f32(shade) * 1.06), u8(f32(shade) * 1.18), 255}
+		shade := u8(214 - depth * 96)
+		tint := mul_color({shade, u8(f32(shade) * 1.06), u8(f32(shade) * 1.18), 255}, g.bg_tint)
 		src := rl.Rectangle{0, 0, f32(tex.width), f32(tex.height)}
 
 		for c in 0 ..< int(view.x / layer_w) + 3 {

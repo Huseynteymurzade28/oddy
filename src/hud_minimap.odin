@@ -1,13 +1,13 @@
 package game
 
 import "core:math"
-import rl "vendor:raylib"
+import rl "../libs/raylib"
 
 /*
 The map panel in the top-right corner.
 
 It is the only way to read the shape of a run, so it draws four things rather
-than one: which rooms exist, how they join up, what is in the ones you have
+than one, as small as they will still read: which rooms exist, how they join up, what is in the ones you have
 already walked through, and where in the current room you are standing. Rooms
 you have not reached yet are shown as bare outlines when they touch somewhere
 you have been, so the map always has an edge to push against.
@@ -17,15 +17,13 @@ screen matches the shape of the world behind it.
 */
 
 @(private = "file")
-CELL_W :: 18.0
+CELL_W :: 14.0
 @(private = "file")
-CELL_H :: 10.0
+CELL_H :: 8.0
 @(private = "file")
-GAP :: 5.0 // the corridors between rooms are drawn in here
+GAP :: 3.0 // the corridors between rooms are drawn in here
 @(private = "file")
-PAD :: 4.0
-@(private = "file")
-HEADER :: 11.0
+PAD :: 3.0
 
 @(private = "file")
 GRID_PX_W :: GRID_W * (CELL_W + GAP) - GAP
@@ -51,24 +49,16 @@ draw_minimap :: proc(g: ^Game) {
 	view := view_size()
 
 	panel_w: f32 = GRID_PX_W + PAD * 2
-	panel_h: f32 = GRID_PX_H + PAD * 2 + HEADER
+	panel_h: f32 = GRID_PX_H + PAD * 2
 	px := view.x - panel_w - 5
+	when TOUCH_CONTROLS {
+		px -= 26 // the pause button has the corner
+	}
 	py: f32 = 5
 	gx := px + PAD
-	gy := py + PAD + HEADER
+	gy := py + PAD
 
-	fill_rect(px, py, panel_w, panel_h, {12, 10, 18, 195})
-	outline_rect(px, py, panel_w, panel_h, {72, 80, 106, 220})
-	draw_text(a, "HOLLOW", {px + PAD, py + 3}, 8, {150, 162, 190, 255})
-	draw_text_right(
-		a,
-		rl.TextFormat("%d/%d", rooms_seen(&g.world), ROOMS_PER_RUN),
-		px + panel_w - PAD,
-		py + 3,
-		8,
-		{100, 110, 136, 255},
-	)
-	fill_rect(px + PAD, py + HEADER, GRID_PX_W, 1, {48, 52, 72, 220})
+	fill_rect(px, py, panel_w, panel_h, {12, 10, 18, 140})
 
 	// Corridors first, so the rooms sit on top of their own connections.
 	for y in 0 ..< GRID_H {
@@ -83,15 +73,12 @@ draw_minimap :: proc(g: ^Game) {
 	}
 	draw_player_dot(g, gx, gy)
 
-	// What to do next, hanging off the bottom edge of the panel.
-	draw_text_right(
-		a,
-		objective_text(g),
-		px + panel_w,
-		py + panel_h + 4,
-		8,
-		g.player.has_key ? rl.Color{240, 168, 92, 255} : rl.Color{255, 214, 110, 255},
-	)
+	// What to do next, hanging under the map for a while whenever it changes.
+	if g.objective_timer > 0 && !g.boss_sealed {
+		colour := g.player.has_key ? rl.Color{240, 168, 92, 255} : rl.Color{255, 214, 110, 255}
+		colour.a = u8(clamp(g.objective_timer, 0, 1) * 255)
+		draw_text_right(a, objective_text(g), px + panel_w, py + panel_h + 3, 8, colour)
+	}
 }
 
 @(private = "file")

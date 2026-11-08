@@ -1,7 +1,7 @@
 package game
 
 import "core:math/rand"
-import rl "vendor:raylib"
+import rl "../libs/raylib"
 
 /*
 Building a run: grow a connected blob of rooms across the grid, stamp a template
@@ -98,6 +98,7 @@ assign_roles :: proc(w: ^World) {
 	if second.x >= 0 {
 		w.rooms[second.y][second.x].role = .Key
 	}
+	defer assign_zones(w)
 
 	// A stall and two treasure rooms, picked from whatever is still ordinary.
 	plain := make([dynamic][2]int, context.temp_allocator)
@@ -125,6 +126,22 @@ assign_roles :: proc(w: ^World) {
 		}
 		w.rooms[cell.y][cell.x].role = .Treasure
 		placed += 1
+	}
+}
+
+@(private = "file")
+assign_zones :: proc(w: ^World) {
+	deepest := 0
+	for y in 0 ..< GRID_H {
+		for x in 0 ..< GRID_W {
+			deepest = max(deepest, w.rooms[y][x].depth)
+		}
+	}
+	for y in 0 ..< GRID_H {
+		for x in 0 ..< GRID_W {
+			room := &w.rooms[y][x]
+			room.zone = zone_for(room.role, room.depth, deepest)
+		}
 	}
 }
 
@@ -189,8 +206,11 @@ Spawns :: struct {
 	has_shop: bool,
 }
 
+// `flip` stamps the template mirrored left to right. Every door rule is
+// symmetric, so a mirrored room is as traversable as the original, and it
+// doubles how many rooms a run can draw from.
 @(private = "file")
-stamp_room :: proc(m: ^Tilemap, cell: [2]int, template: string) -> Spawns {
+stamp_room :: proc(m: ^Tilemap, cell: [2]int, template: string, flip := false) -> Spawns {
 	s := Spawns {
 		enemies = make([dynamic][2]int, context.temp_allocator),
 		chests  = make([dynamic][2]int, context.temp_allocator),
@@ -206,7 +226,7 @@ stamp_room :: proc(m: ^Tilemap, cell: [2]int, template: string) -> Spawns {
 			y += 1
 			continue
 		}
-		tx, ty := ox + x, oy + y
+		tx, ty := ox + (flip ? ROOM_W - 1 - x : x), oy + y
 		// Unused cells were pre-filled with rock, so anything a template does
 		// not explicitly make solid has to be hollowed out again.
 		tile_set(m, tx, ty, .Empty)
@@ -246,6 +266,92 @@ stamp_room :: proc(m: ^Tilemap, cell: [2]int, template: string) -> Spawns {
 	return s
 }
 
+// Templates are drawn on a grid, and it shows: every ceiling is one straight
+// line and every wall another. This eats into both with a random walk, a tile
+// or two deep, so the rooms read as dug out of rock rather than built.
+//
+// It is careful in the same ways the template rules are: nothing within reach
+// of a doorway, nothing on a spawn, and a bump only goes where there is open air
+// for a couple of tiles past it, so it never closes off a ledge, never leaves a
+// pocket you can fall into, and never puts a ceiling on a platform's head.
+@(private = "file")
+roughen_room :: proc(m: ^Tilemap, cell: [2]int, s: ^Spawns) {
+	ox, oy := cell.x * ROOM_W, cell.y * ROOM_H
+
+	clear_air :: proc(m: ^Tilemap, x0, y0, x1, y1: int) -> bool {
+		for y in y0 ..= y1 {
+			for x in x0 ..= x1 {
+				t := tile_at(m, x, y)
+				if t != .Empty {
+					return false
+				}
+			}
+		}
+		return true
+	}
+	near_spawn :: proc(s: ^Spawns, x, y: int) -> bool {
+		near :: proc(a: [2]int, x, y: int) -> bool {
+			return abs(a.x - x) <= 1 && abs(a.y - y) <= 2
+		}
+		for list in ([?][dynamic][2]int{s.enemies, s.chests, s.coins, s.runes}) {
+			for p in list {
+				if near(p, x, y) {
+					return true
+				}
+			}
+		}
+		return (s.has_key && near(s.key, x, y)) || (s.has_shop && near(s.shop, x, y))
+	}
+
+	// The ceiling: a depth of 0-2 tiles that wanders as it goes along.
+	depth := 0
+	for x in 2 ..< ROOM_W - 2 {
+		if rand.float32() < 0.35 {
+			depth = clamp(depth + (rand.float32() < 0.5 ? -1 : 1), 0, 2)
+		}
+		if x >= DOOR_X - 2 && x < DOOR_X + DOOR_W + 2 {
+			depth = 0
+			continue
+		}
+		tx := ox + x
+		for d in 1 ..= depth {
+			ty := oy + d
+			if near_spawn(s, tx, ty) || !clear_air(m, tx, ty, tx, ty + 3) {
+				break
+			}
+			tile_set(m, tx, ty, .Rock)
+		}
+	}
+
+	// The walls, on both sides, down to a little above the side doors.
+	for side in 0 ..< 2 {
+		depth = 0
+		for y in 2 ..< DOOR_Y - 2 {
+			if rand.float32() < 0.4 {
+				depth = clamp(depth + (rand.float32() < 0.5 ? -1 : 1), 0, 2)
+			}
+			ty := oy + y
+			for d in 1 ..= depth {
+				x := side == 0 ? d : ROOM_W - 1 - d
+				tx := ox + x
+				// Open air for two tiles further in, and above and below.
+				inward := side == 0 ? 1 : -1
+				ax0 := min(tx + inward, tx + inward * 2)
+				ax1 := max(tx + inward, tx + inward * 2)
+				if near_spawn(s, tx, ty) || !clear_air(m, ax0, ty - 1, ax1, ty + 1) {
+					break
+				}
+				tile_set(m, tx, ty, .Rock)
+			}
+		}
+	}
+}
+
+// The row of the step under every ceiling door. From standing on it to standing
+// on the floor of the room above is six tiles: a jump and a double jump, with
+// room to spare (see the numbers in `player.odin`).
+CEILING_STEP :: 4
+
 @(private = "file")
 carve_doors :: proc(w: ^World, m: ^Tilemap, cell: [2]int) {
 	room := w.rooms[cell.y][cell.x]
@@ -266,8 +372,12 @@ carve_doors :: proc(w: ^World, m: ^Tilemap, cell: [2]int) {
 		}
 	}
 	if .South in room.doors {
+		// A trapdoor rather than a hole: the floor over a doorway down is a
+		// one-way platform, flush with the floor. Hold down to drop through it.
+		// Coming up from below you jump through it and land on it, so the climb
+		// ends on the floor itself instead of on the lip of a pit.
 		for i in 0 ..< DOOR_W {
-			tile_set(m, ox + DOOR_X + i, oy + ROOM_H - 2, .Empty)
+			tile_set(m, ox + DOOR_X + i, oy + ROOM_H - 2, .Platform)
 			tile_set(m, ox + DOOR_X + i, oy + ROOM_H - 1, .Empty)
 			tile_set(m, ox + DOOR_X + i, oy + ROOM_H, .Empty)
 		}
@@ -276,6 +386,14 @@ carve_doors :: proc(w: ^World, m: ^Tilemap, cell: [2]int) {
 		for i in 0 ..< DOOR_W {
 			tile_set(m, ox + DOOR_X + i, oy, .Empty)
 			tile_set(m, ox + DOOR_X + i, oy - 1, .Empty)
+		}
+		// And a step right under it, so every ceiling door is climbed the
+		// same way: onto the step, then one jump and a double jump.
+		for x in DOOR_X - 1 ..< DOOR_X + DOOR_W + 1 {
+			tx := ox + x
+			if tile_at(m, tx, oy + CEILING_STEP) == .Empty && tile_at(m, tx, oy + CEILING_STEP - 1) == .Empty {
+				tile_set(m, tx, oy + CEILING_STEP, .Platform)
+			}
 		}
 	}
 }
@@ -291,6 +409,7 @@ seal_boss_room :: proc(w: ^World, m: ^Tilemap) {
 	add :: proc(w: ^World, m: ^Tilemap, x, y: int) {
 		tile_set(m, x, y, .Gate)
 		append(&w.gates, [2]int{x, y})
+		append(&w.boss_doors, [2]int{x, y})
 	}
 
 	if .East in room.doors {
@@ -300,7 +419,13 @@ seal_boss_room :: proc(w: ^World, m: ^Tilemap) {
 		for i in 0 ..< DOOR_H {add(w, m, ox, oy + DOOR_Y + i)}
 	}
 	if .South in room.doors {
-		for i in 0 ..< DOOR_W {add(w, m, ox + DOOR_X + i, oy + ROOM_H - 1)}
+		for i in 0 ..< DOOR_W {
+			add(w, m, ox + DOOR_X + i, oy + ROOM_H - 1)
+			// The floor over a doorway down is a one-way platform rather than a
+			// hole: the arena stays flat, so nothing that walks can get stuck
+			// in a pit, and you can still drop through once the door is open.
+			tile_set(m, ox + DOOR_X + i, oy + ROOM_H - 2, .Platform)
+		}
 	}
 	if .North in room.doors {
 		for i in 0 ..< DOOR_W {add(w, m, ox + DOOR_X + i, oy)}
@@ -359,7 +484,11 @@ populate_room :: proc(g: ^Game, cell: [2]int, s: ^Spawns) {
 	room := &g.world.rooms[cell.y][cell.x]
 
 	if s.has_boss {
-		append(&g.enemies, enemy_make(.Golem, tile_centre(s.boss) + {0, TILE / 2}))
+		pos := tile_centre(s.boss) + {0, TILE / 2}
+		if enemy_flies(g.boss_kind) {
+			pos.y -= TILE * 5 // she hangs in the air over the spot
+		}
+		append(&g.enemies, enemy_make(g.boss_kind, pos))
 	}
 	if s.has_key {
 		append(&g.pickups, pickup_make(.Key, tile_centre(s.key)))
@@ -431,6 +560,7 @@ populate_room :: proc(g: ^Game, cell: [2]int, s: ^Spawns) {
 world_generate :: proc(g: ^Game) {
 	g.world = {}
 	g.world.gates = make([dynamic][2]int)
+	g.world.boss_doors = make([dynamic][2]int)
 	g.map_tiles = tilemap_make(GRID_W * ROOM_W, GRID_H * ROOM_H)
 
 	clear(&g.enemies)
@@ -457,7 +587,14 @@ world_generate :: proc(g: ^Game) {
 			if g.world.rooms[y][x].role == .Unused {
 				continue
 			}
-			spawns[y][x] = stamp_room(&g.map_tiles, {x, y}, template_for(g.world.rooms[y][x].role))
+			role := g.world.rooms[y][x].role
+			// The fixed rooms keep their handedness: the stall and the start are
+			// laid out around where things stand.
+			flip := role != .Start && role != .Shop && rand.float32() < 0.5
+			spawns[y][x] = stamp_room(&g.map_tiles, {x, y}, template_for(role), flip)
+			if role == .Normal || role == .Key || role == .Treasure {
+				roughen_room(&g.map_tiles, {x, y}, &spawns[y][x])
+			}
 		}
 	}
 	for y in 0 ..< GRID_H {
@@ -488,4 +625,6 @@ world_generate :: proc(g: ^Game) {
 	// Scenery goes on last: it is the only pass that has to dodge everything the
 	// others placed.
 	scatter_props(g)
+	decor_scatter(g)
+	clear(&g.motes)
 }

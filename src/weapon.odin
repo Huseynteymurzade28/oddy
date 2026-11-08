@@ -2,7 +2,7 @@ package game
 
 import "core:math"
 import "core:math/rand"
-import rl "vendor:raylib"
+import rl "../libs/raylib"
 
 /*
 Guns are rolled, not authored. A class fixes the feel — how fast it fires, how

@@ -1,7 +1,7 @@
 package game
 
 import "core:math"
-import rl "vendor:raylib"
+import rl "../libs/raylib"
 
 // Axis-separated AABB-vs-tilemap movement. Callers move one axis at a time,
 // which keeps corner cases (sliding along a wall while falling) simple.

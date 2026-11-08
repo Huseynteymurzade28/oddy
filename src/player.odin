@@ -1,7 +1,7 @@
 package game
 
 import "core:math"
-import rl "vendor:raylib"
+import rl "../libs/raylib"
 
 PLAYER_W :: 10
 PLAYER_H :: 22
@@ -11,18 +11,25 @@ GROUND_ACCEL :: 1500.0
 AIR_ACCEL :: 1000.0
 GROUND_FRICTION :: 1800.0
 AIR_FRICTION :: 400.0
-GRAVITY :: 900.0
+GRAVITY :: 950.0
+FALL_GRAVITY :: 1.2 // gravity is a little stronger on the way down: jumps feel less floaty
 MAX_FALL :: 430.0
 
-JUMP_VELOCITY :: 305.0
-DOUBLE_JUMP_VELOCITY :: 275.0
-JUMP_CUT :: 0.45 // fraction of upward speed kept when jump is released early
-COYOTE_TIME :: 0.10 // grace period for jumping after walking off a ledge
-JUMP_BUFFER :: 0.12 // how early a jump press still counts on landing
+// A jump clears 4.5 tiles and the second one almost 3 more, so a platform four
+// rows up is always one jump and the next room up is always two. The templates
+// are drawn to those numbers (see `world_templates.odin`).
+JUMP_VELOCITY :: 375.0
+DOUBLE_JUMP_VELOCITY :: 305.0
+JUMP_CUT :: 0.5 // fraction of upward speed kept when jump is released early
+MIN_JUMP_HOLD :: 0.12 // a tap shorter than this still gives a full-height jump
+COYOTE_TIME :: 0.12 // grace period for jumping after walking off a ledge
+JUMP_BUFFER :: 0.15 // how early a jump press still counts on landing
+LEDGE_ASSIST :: 9 // pixels: a jump that ends just short of a ledge is lifted onto it
+CORNER_NUDGE :: 5 // pixels: a head that clips a corner slides past it instead
 
 WALL_SLIDE_SPEED :: 62.0
 WALL_JUMP_X :: 210.0
-WALL_JUMP_Y :: 300.0
+WALL_JUMP_Y :: 330.0
 WALL_STICK_TIME :: 0.16 // how long a wall jump overrides the steering input
 
 INVULN_TIME :: 1.1
@@ -40,6 +47,7 @@ Player :: struct {
 	coyote:       f32,
 	jump_buffer:  f32,
 	holding_jump: bool,
+	jump_time:    f32, // since the last jump started
 	air_jumps:    int, // mid-air jumps still available
 	wall_dir:     f32, // which side the wall is on while sliding: -1, 0 or +1
 	wall_stick:   f32,
@@ -52,6 +60,9 @@ Player :: struct {
 
 	// combat
 	aim:          f32, // radians, world space
+	aim_hold:     f32, // a dragged aim outlives the thumb by this long
+	aim_target:   rl.Vector2, // what the gun picked by itself, if anything
+	has_target:   bool,
 	weapon:       Weapon,
 	fire_cd:      f32,
 	fire_rate:    f32, // a multiplier the shop can buy up, 1 by default
@@ -105,31 +116,41 @@ player_update :: proc(g: ^Game, dt: f32) {
 	p.fire_cd = max(0, p.fire_cd - dt)
 	p.wall_stick = max(0, p.wall_stick - dt)
 
+	// --- input ---------------------------------------------------------------
+	in_ := g.input
+	move := in_.move
+	down := in_.down
+	jump_pressed := in_.jump
+	jump_held := in_.jump_held
+
 	// --- aim -----------------------------------------------------------------
-	target := rl.GetScreenToWorld2D(rl.GetMousePosition(), g.camera)
-	to_target := target - player_hand(p^)
-	if rl.Vector2LengthSqr(to_target) > 0.01 {
-		p.aim = math.atan2(to_target.y, to_target.x)
+	// A mouse points at the world. A thumb either drags a direction or leaves
+	// the gun to find its own target; with no thumb on the trigger at all, the
+	// gun just faces the way you are walking.
+	p.aim_hold = max(0, p.aim_hold - dt)
+	p.has_target = false
+	switch {
+	case in_.has_point:
+		to_target := in_.aim_point - player_hand(p^)
+		if rl.Vector2LengthSqr(to_target) > 0.01 {
+			p.aim = math.atan2(to_target.y, to_target.x)
+		}
+	case in_.has_dir:
+		p.aim = math.atan2(in_.aim_dir.y, in_.aim_dir.x)
+		p.aim_hold = 0.5
+	case in_.fire:
+		p.aim, p.aim_target, p.has_target = auto_aim(g)
+	case move != 0 && p.aim_hold <= 0:
+		p.aim = move < 0 ? math.PI : 0
 	}
 	p.flip = math.cos(p.aim) < 0
-
-	// --- input ---------------------------------------------------------------
-	move: f32
-	if rl.IsKeyDown(.A) || rl.IsKeyDown(.LEFT) {
-		move -= 1
-	}
-	if rl.IsKeyDown(.D) || rl.IsKeyDown(.RIGHT) {
-		move += 1
-	}
-	down := rl.IsKeyDown(.S) || rl.IsKeyDown(.DOWN)
-	jump_pressed := rl.IsKeyPressed(.SPACE) || rl.IsKeyPressed(.W) || rl.IsKeyPressed(.UP)
-	jump_held := rl.IsKeyDown(.SPACE) || rl.IsKeyDown(.W) || rl.IsKeyDown(.UP)
 
 	if jump_pressed {
 		p.jump_buffer = JUMP_BUFFER
 	}
 	p.jump_buffer = max(0, p.jump_buffer - dt)
 	p.coyote = max(0, p.coyote - dt)
+	p.jump_time += dt
 
 	// --- horizontal ----------------------------------------------------------
 	// A wall jump owns the horizontal velocity briefly; without that, holding
@@ -159,6 +180,7 @@ player_update :: proc(g: ^Game, dt: f32) {
 			p.coyote = 0
 			p.jump_buffer = 0
 			p.holding_jump = true
+			p.jump_time = 0
 			p.air_jumps = 1
 			play(a, .Jump)
 		case p.wall_dir != 0:
@@ -167,6 +189,7 @@ player_update :: proc(g: ^Game, dt: f32) {
 			p.wall_dir = 0
 			p.jump_buffer = 0
 			p.holding_jump = true
+			p.jump_time = 0
 			p.air_jumps = 1
 			animator_restart(&p.anim, &a.player.double_jump)
 			play(a, .Jump)
@@ -175,28 +198,48 @@ player_update :: proc(g: ^Game, dt: f32) {
 			p.vel.y = -DOUBLE_JUMP_VELOCITY
 			p.jump_buffer = 0
 			p.holding_jump = true
+			p.jump_time = 0
 			animator_restart(&p.anim, &a.player.double_jump)
 			play(a, .Jump)
 		}
 	}
-	if p.holding_jump && !jump_held {
-		if p.vel.y < 0 {
-			p.vel.y *= JUMP_CUT
+	// Letting go early makes a short hop, but not before MIN_JUMP_HOLD: a quick
+	// tap is a full jump. On a touch screen every jump is a full one: a thumb
+	// on glass cannot judge a few hundredths of a second, and a ledge you
+	// reached once you should reach every time.
+	when !TOUCH_CONTROLS {
+		if p.holding_jump && !jump_held && p.jump_time >= MIN_JUMP_HOLD {
+			if p.vel.y < 0 {
+				p.vel.y *= JUMP_CUT
+			}
+			p.holding_jump = false
 		}
-		p.holding_jump = false
+	} else {
+		_ = jump_held
 	}
 	if p.vel.y >= 0 {
 		p.holding_jump = false
 	}
 
-	p.vel.y = min(p.vel.y + GRAVITY * dt, MAX_FALL)
+	gravity: f32 = p.vel.y > 0 ? GRAVITY * FALL_GRAVITY : GRAVITY
+	p.vel.y = min(p.vel.y + gravity * dt, MAX_FALL)
 	if p.wall_dir != 0 {
 		p.vel.y = min(p.vel.y, WALL_SLIDE_SPEED)
 	}
 
 	// --- move and collide ----------------------------------------------------
 	wall_hit: bool
+	before := r
 	r, wall_hit = move_x(m, r, p.vel.x * dt)
+	if wall_hit && !p.grounded && move != 0 && (move > 0) == (p.vel.x > 0) {
+		// Ledge assist: the feet came up just short of the top of the wall
+		// being pushed into. Lift them over rather than slide back down.
+		if lifted, ok := ledge_lift(m, before, p.vel.x * dt); ok {
+			r = lifted
+			wall_hit = false
+			p.vel.y = min(p.vel.y, 0)
+		}
+	}
 	if wall_hit {
 		p.vel.x = 0
 	}
@@ -204,7 +247,16 @@ player_update :: proc(g: ^Game, dt: f32) {
 	was_airborne := !p.grounded
 	falling_speed := p.vel.y
 	grounded, bumped_head: bool
+	pre := r
 	r, grounded, bumped_head = move_y(m, r, p.vel.y * dt, down)
+	if bumped_head {
+		// Corner nudge: a head that only clipped the edge of a tile slides
+		// sideways past it and the jump carries on.
+		if nudged, ok := corner_nudge(m, pre, p.vel.y * dt, down); ok {
+			r = nudged
+			bumped_head = false
+		}
+	}
 	if grounded {
 		if was_airborne && falling_speed > 220 {
 			spawn_burst(g, {r.x + PLAYER_W / 2, r.y + PLAYER_H}, {200, 220, 190, 255}, 5, 70, 1.0)
@@ -224,7 +276,7 @@ player_update :: proc(g: ^Game, dt: f32) {
 	}
 
 	// --- shooting ------------------------------------------------------------
-	if rl.IsMouseButtonDown(.LEFT) && p.fire_cd <= 0 {
+	if in_.fire && p.fire_cd <= 0 {
 		player_shoot(g)
 	}
 
@@ -246,6 +298,40 @@ player_update :: proc(g: ^Game, dt: f32) {
 	}
 	animator_play(&p.anim, body)
 	animator_update(&p.anim, dt)
+}
+
+@(private = "file")
+corner_nudge :: proc(m: ^Tilemap, r: rl.Rectangle, dy: f32, down: bool) -> (rl.Rectangle, bool) {
+	for off in 1 ..= CORNER_NUDGE {
+		for side in ([2]f32{-1, 1}) {
+			t := r
+			t.x += f32(off) * side
+			if tilemap_overlaps_solid(m, t) {
+				continue
+			}
+			moved, _, bumped := move_y(m, t, dy, down)
+			if !bumped {
+				return moved, true
+			}
+		}
+	}
+	return r, false
+}
+
+@(private = "file")
+ledge_lift :: proc(m: ^Tilemap, r: rl.Rectangle, dx: f32) -> (rl.Rectangle, bool) {
+	for up in 1 ..= LEDGE_ASSIST {
+		t := r
+		t.y -= f32(up)
+		if tilemap_overlaps_solid(m, t) {
+			return r, false // a ceiling in the way
+		}
+		moved, hit := move_x(m, t, dx)
+		if !hit {
+			return moved, true
+		}
+	}
+	return r, false
 }
 
 @(private = "file")

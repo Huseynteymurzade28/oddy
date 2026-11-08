@@ -1,6 +1,6 @@
 package game
 
-import rl "vendor:raylib"
+import rl "../libs/raylib"
 
 /*
 Every animation in the art pack is its own file: a strip of equally sized cells

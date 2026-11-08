@@ -1,7 +1,7 @@
 package game
 
 import "core:math"
-import rl "vendor:raylib"
+import rl "../libs/raylib"
 
 TILE :: 16
 TILESET_COLUMNS :: 20
@@ -101,15 +101,23 @@ tilemap_touches_hazard :: proc(m: ^Tilemap, r: rl.Rectangle) -> bool {
 The tileset holds several 6x6 blocks, each one a full nine-slice of a material:
 the outer ring is its edges and corners, and the 4x4 interior is fill variants.
 A material only has to name the index of its top-left corner.
+
+The earth is Pixel Adventure's, one kind per zone: green grass over brown
+earth up top, pink frosting over sand in the middle, orange moss over red
+earth in the deep. Every exposed top grows the grass by itself, because that
+is what the top row of a nine-slice is.
 */
-MATERIAL_ROCK :: 0
-MATERIAL_DEEP :: 6
-MATERIAL_MOSS :: 120
+EARTH := [Zone]int {
+	.Mossy   = 240,
+	.Drowned = 246,
+	.Ember   = 252,
+}
+MATERIAL_GATE :: 360 // red brick: a doorway walled up
 
 // The one-way platforms are a single strip: a left cap, four middles, a right cap.
-PLATFORM_LEFT :: 12
-PLATFORM_MID :: 13
-PLATFORM_RIGHT :: 17
+PLATFORM_LEFT :: 366
+PLATFORM_MID :: 367
+PLATFORM_RIGHT :: 371
 
 // Water is a 2x2 pattern (a surface row over a body row) with five frames of
 // animation stacked down the sheet, two rows apart.
@@ -120,16 +128,12 @@ WATER_FRAME_STRIDE :: 40
 WATER_FRAME_TIME :: 0.18
 
 @(private = "file")
-material_base :: proc(t: Tile) -> int {
+material_base :: proc(t: Tile, zone: Zone) -> int {
 	switch t {
-	case .Rock:
-		return MATERIAL_ROCK
-	case .Deep:
-		return MATERIAL_DEEP
-	case .Moss:
-		return MATERIAL_MOSS
+	case .Rock, .Deep, .Moss:
+		return EARTH[zone]
 	case .Gate:
-		return MATERIAL_DEEP
+		return MATERIAL_GATE
 	case .Empty, .Platform, .Water:
 	}
 	return -1
@@ -152,8 +156,8 @@ variant :: proc(x, y, salt: int) -> int {
 // are also solid. Different materials still count as joined, so a mossy surface
 // sits flush on the rock below it.
 @(private = "file")
-solid_source :: proc(m: ^Tilemap, x, y: int, t: Tile) -> rl.Rectangle {
-	base := material_base(t)
+solid_source :: proc(m: ^Tilemap, x, y: int, t: Tile, zone: Zone) -> rl.Rectangle {
+	base := material_base(t, zone)
 	if base < 0 {
 		return {}
 	}
@@ -207,7 +211,12 @@ platform_source :: proc(m: ^Tilemap, x, y: int) -> rl.Rectangle {
 	return tileset_source(PLATFORM_LEFT)
 }
 
-tilemap_draw :: proc(m: ^Tilemap, a: ^Assets, view: rl.Rectangle, time: f32) {
+// Each tile is tinted by the zone of the room it is in, which is most of what
+// makes the deep look deep. Water in the deepest zone is drawn as lava.
+tilemap_draw :: proc(g: ^Game, view: rl.Rectangle) {
+	m := &g.map_tiles
+	a := &g.assets
+	time := g.time
 	x0 := max(0, int(math.floor(view.x / TILE)) - 1)
 	y0 := max(0, int(math.floor(view.y / TILE)) - 1)
 	x1 := min(m.width - 1, int((view.x + view.width) / TILE) + 1)
@@ -221,21 +230,26 @@ tilemap_draw :: proc(m: ^Tilemap, a: ^Assets, view: rl.Rectangle, time: f32) {
 			}
 			dest := rl.Rectangle{f32(x) * TILE, f32(y) * TILE, TILE, TILE}
 			src: rl.Rectangle
-			tint := rl.WHITE
+			zone := zone_of_tile(&g.world, x, y)
+			look := &ZONE_LOOKS[zone]
+			tint := look.rock
 			switch t {
 			case .Water:
 				src = water_source(m, x, y, time)
-				tint = {255, 255, 255, 210}
+				tint = look.liquid
 			case .Platform:
 				src = platform_source(m, x, y)
 			case .Gate:
 				// A sealed door reads as bedrock lit from within, pulsing so it
 				// is obvious it is waiting on something.
-				src = solid_source(m, x, y, t)
+				src = solid_source(m, x, y, t, zone)
 				pulse := u8(180 + 60 * math.sin(time * 4 + f32(y)))
 				tint = {255, 210, pulse, 255}
+				if g.boss_sealed && !g.boss_down {
+					tint = {255, u8(110 + 40 * math.sin(time * 6 + f32(y))), 90, 255}
+				}
 			case .Rock, .Deep, .Moss:
-				src = solid_source(m, x, y, t)
+				src = solid_source(m, x, y, t, zone)
 			case .Empty:
 				continue
 			}

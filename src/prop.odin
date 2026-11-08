@@ -1,7 +1,7 @@
 package game
 
 import "core:math/rand"
-import rl "vendor:raylib"
+import rl "../libs/raylib"
 
 /*
 Scenery: grass, bushes, stones, crates, fence posts, ladder scraps, and the trees
@@ -44,23 +44,23 @@ Prop_Rule :: struct {
 }
 
 // Checked in order, first hit wins, so the rare big things get their chance
-// before grass carpets everything. The tints pull forest-green art down into a
-// lit-from-nowhere cave; without them the props glow against the tileset.
+// before grass carpets everything. They are drawn in their own colours, which
+// sit well on the bright earth; the things behind the rock are dimmed a little
+// so they read as further back.
 @(private = "file")
 PROP_RULES := [?]Prop_Rule {
-	{.Ridge, 0.028, .Behind, {96, 102, 112, 255}},
-	{.Ladder, 0.030, .Behind, {112, 96, 78, 255}},
-	{.Stone, 0.045, .Level, {138, 140, 150, 255}},
-	{.Box, 0.030, .Level, {158, 138, 112, 255}},
-	{.Fence, 0.040, .Level, {150, 134, 112, 255}},
-	{.Bush, 0.120, .Front, {104, 136, 108, 255}},
-	{.Grass, 0.400, .Front, {116, 148, 118, 255}},
+	{.Ridge, 0.028, .Behind, {200, 200, 210, 255}},
+	{.Ladder, 0.030, .Behind, {210, 200, 190, 255}},
+	{.Stone, 0.045, .Level, {255, 255, 255, 255}},
+	{.Box, 0.030, .Level, {255, 255, 255, 255}},
+	{.Fence, 0.040, .Level, {255, 255, 255, 255}},
+	{.Bush, 0.120, .Front, {255, 255, 255, 255}},
+	{.Grass, 0.400, .Front, {255, 255, 255, 255}},
 }
 
-// The cave mouth the background layers show through. Only the starting room gets
-// these, and only as silhouettes behind the rock.
+// The trees in the starting room. They stand behind the rock, a little dimmed.
 @(private = "file")
-LANDMARK_TINT :: rl.Color{58, 70, 66, 255}
+LANDMARK_TINT :: rl.Color{170, 180, 170, 255}
 
 // Does the sprite fit in open air, standing on this tile? Sprites carry
 // transparent padding, so this is deliberately strict about the whole bounding
