@@ -53,9 +53,16 @@ SUPER_X :: 260.0
 HYPER_X :: 320.0
 HYPER_Y_SCALE :: 0.55
 
-DEATH_TIME :: 0.5 // from the hit to being back at the checkpoint
-RESPAWN_TIME :: 0.3 // the pop of arriving back
+DEATH_TIME :: 0.6 // from the hit to being back at the checkpoint
+RESPAWN_TIME :: 0.32 // the puff you arrive in; the body shows once it clears
 FALL_DEATH_MARGIN :: 32.0 // how far under the level counts as fallen out of it
+
+// Squash and stretch: how far the body is pulled out of shape by a jump, a
+// landing or a dash, and how fast it springs back.
+STRETCH_JUMP :: rl.Vector2{0.72, 1.32}
+STRETCH_LAND :: rl.Vector2{1.35, 0.7}
+STRETCH_RETURN :: 14.0
+RUN_DUST_GAP :: 0.11
 
 TRAIL_LEN :: 6
 TRAIL_GAP :: 0.025
@@ -88,6 +95,8 @@ Player :: struct {
 	trail:        [TRAIL_LEN]Afterimage,
 	trail_timer:  f32,
 	flash:        f32, // the white flash when a dash comes back
+	stretch:      rl.Vector2, // squash and stretch, {1, 1} at rest
+	dust_timer:   f32,
 
 	riding:       int, // the platform in `g.things` stood on, or -1
 
@@ -104,6 +113,7 @@ player_init :: proc(p: ^Player, spawn: rl.Vector2) {
 		since_dash   = 1,
 		respawn_time = RESPAWN_TIME,
 		riding       = -1,
+		stretch      = {1, 1},
 	}
 }
 
@@ -120,13 +130,18 @@ approach :: proc(current, target, delta: f32) -> f32 {
 	return current < target ? min(current + delta, target) : max(current - delta, target)
 }
 
-// Snaps whatever the stick or the keys say to one of eight directions. With no
-// direction held, a dash goes the way you are facing.
 @(private = "file")
 dash_direction :: proc(p: ^Player, in_: Input) -> rl.Vector2 {
-	d := rl.Vector2{in_.move, in_.move_y}
+	return dash_aim(in_.move, in_.move_y, p.flip)
+}
+
+// Snaps whatever the stick or the keys say to one of eight directions. With no
+// direction held, a dash goes the way you are facing. The touch stick draws
+// the same answer, so what it shows is what you get.
+dash_aim :: proc(move, move_y: f32, facing_left: bool) -> rl.Vector2 {
+	d := rl.Vector2{move, move_y}
 	if rl.Vector2Length(d) < 0.35 {
-		return {p.flip ? -1 : 1, 0}
+		return {facing_left ? -1 : 1, 0}
 	}
 	angle := math.round(math.atan2(d.y, d.x) / (math.PI / 4)) * (math.PI / 4)
 	dir := rl.Vector2{math.cos(angle), math.sin(angle)}
@@ -147,6 +162,7 @@ player_update :: proc(g: ^Game, dt: f32) {
 
 	trail_update(p, dt)
 	p.flash = max(0, p.flash - dt)
+	p.stretch += (rl.Vector2{1, 1} - p.stretch) * min(1, STRETCH_RETURN * dt)
 
 	if p.dead {
 		p.death_timer -= dt
@@ -207,7 +223,16 @@ player_update :: proc(g: ^Game, dt: f32) {
 		g.shake = max(g.shake, 2.5)
 		spawn_burst(g, player_centre(p^), {200, 230, 255, 255}, 8, 90, 1.0)
 		animator_restart(&p.anim, &a.player.double_jump)
+		// Stretched along the dash: long and thin sideways, tall going up.
+		if p.dash_dir.x == 0 {
+			p.stretch = {0.7, 1.35}
+		} else if p.dash_dir.y == 0 {
+			p.stretch = {1.4, 0.72}
+		} else {
+			p.stretch = {1.15, 1.1}
+		}
 		play(a, .Dash)
+		haptic(.Dash)
 	}
 
 	dashing := p.dash_time > 0
@@ -264,11 +289,13 @@ player_update :: proc(g: ^Game, dt: f32) {
 			p.vel.y = -JUMP_VELOCITY * (p.dash_dir.y > 0 ? HYPER_Y_SCALE : 1)
 			start_jump(p)
 			p.dashes = 1
+			p.stretch = {1.3, 0.8}
 			spawn_burst(g, p.pos, {230, 240, 255, 255}, 6, 80, 1.0)
-			play(a, .Jump)
+			play(a, .Bounce)
 		case !dashing && (p.grounded || p.coyote > 0):
 			p.vel.y = -JUMP_VELOCITY
 			start_jump(p)
+			p.stretch = STRETCH_JUMP
 			spawn_burst(g, p.pos, {200, 220, 190, 255}, 4, 50, 0.8)
 			play(a, .Jump)
 		case near_wall != 0 && !p.grounded:
@@ -281,6 +308,7 @@ player_update :: proc(g: ^Game, dt: f32) {
 			p.wall_dir = 0
 			p.flip = near_wall > 0
 			start_jump(p)
+			p.stretch = {0.8, 1.2}
 			spawn_burst(g, {p.pos.x + near_wall * PLAYER_W / 2, p.pos.y - PLAYER_H / 2}, {200, 220, 190, 255}, 4, 50, 0.8)
 			play(a, .Jump)
 		}
@@ -352,8 +380,12 @@ player_update :: proc(g: ^Game, dt: f32) {
 		}
 	}
 	if grounded {
-		if was_airborne && falling_speed > 220 {
-			spawn_burst(g, {r.x + PLAYER_W / 2, r.y + PLAYER_H}, {200, 220, 190, 255}, 5, 70, 1.0)
+		if was_airborne && falling_speed > 120 {
+			// The harder the fall, the flatter the landing.
+			k := clamp((falling_speed - 120) / (MAX_FALL - 120), 0, 1)
+			p.stretch = rl.Vector2{1, 1} + (STRETCH_LAND - {1, 1}) * (0.35 + 0.65 * k)
+			spawn_burst(g, {r.x + PLAYER_W / 2, r.y + PLAYER_H}, {200, 220, 190, 255}, 3 + int(k * 5), 70, 1.0)
+			play(a, .Land)
 		}
 		p.vel.y = 0
 		if dashing && p.dash_dir.x == 0 {
@@ -391,6 +423,19 @@ player_update :: proc(g: ^Game, dt: f32) {
 	if tilemap_touches_hazard(m, player_rect(p^)) || p.pos.y > tilemap_bounds(m).y + FALL_DEATH_MARGIN {
 		player_kill(g)
 		return
+	}
+
+	// Little puffs behind the heels while running, and down a wall you slide.
+	p.dust_timer -= dt
+	if p.dust_timer <= 0 {
+		switch {
+		case p.grounded && abs(p.vel.x) > 90:
+			p.dust_timer = RUN_DUST_GAP
+			spawn_spark(g, p.pos - {math.sign(p.vel.x) * 3, 1}, {-math.sign(p.vel.x), -0.6}, {210, 220, 200, 200}, 30, 0.8)
+		case p.wall_dir != 0:
+			p.dust_timer = RUN_DUST_GAP
+			spawn_spark(g, {p.pos.x + p.wall_dir * PLAYER_W / 2, p.pos.y - 6}, {-p.wall_dir, -0.5}, {210, 220, 200, 200}, 30, 0.8)
+		}
 	}
 
 	// --- animation -----------------------------------------------------------
@@ -452,8 +497,9 @@ player_bounce :: proc(g: ^Game, speed: f32) {
 	p.dashes = 0
 	player_refill_dash(p)
 	animator_restart(&p.anim, &g.assets.player.double_jump)
+	p.stretch = {0.7, 1.35}
 	spawn_burst(g, p.pos, {230, 240, 255, 255}, 6, 70, 1.0)
-	play(&g.assets, .Jump)
+	play(&g.assets, .Bounce)
 }
 
 // Gives the dash back, with a flash so you can see it happen.
@@ -545,14 +591,18 @@ player_kill :: proc(g: ^Game) {
 	c := player_centre(p^)
 	spawn_burst(g, c, {255, 255, 255, 255}, 18, 170, 1.6)
 	spawn_burst(g, c, {255, 120, 120, 255}, 12, 110, 1.2)
-	play(&g.assets, .Hurt)
+	spawn_poof(g, &g.assets.player.disappear, p.pos)
+	play(&g.assets, .Death)
+	haptic(.Death)
 }
 
 @(private = "file")
 player_respawn :: proc(g: ^Game) {
 	level_reset_things(g)
 	player_init(&g.player, g.respawn)
+	spawn_poof(g, &g.assets.player.appear, g.player.pos)
 	spawn_burst(g, player_centre(g.player), {200, 230, 255, 255}, 12, 80, 1.0)
+	play(&g.assets, .Respawn)
 }
 
 // While the dash is spent the body is tinted cooler, which is the only way to
@@ -572,21 +622,18 @@ player_draw :: proc(p: Player, a: ^Assets) {
 	if p.dead {
 		return
 	}
+	if p.respawn_time > RESPAWN_TIME * 0.4 {
+		return // still inside the puff
+	}
 	tint := rl.WHITE
 	if p.dashes == 0 {
 		tint = SPENT_TINT
 	}
-	scale: f32 = 1
-	if p.respawn_time > 0 {
-		// Arriving back: a quick grow from nothing.
-		k := 1 - p.respawn_time / RESPAWN_TIME
-		scale = 0.4 + 0.6 * k
-	}
 	if p.anim.anim != nil {
-		anim_draw_frame(p.anim.anim, p.anim.frame, p.pos, p.flip, tint, scale)
+		anim_draw_stretched(p.anim.anim, p.anim.frame, p.pos, p.flip, tint, p.stretch)
 		if p.flash > 0 {
 			rl.BeginBlendMode(.ADDITIVE)
-			anim_draw_frame(p.anim.anim, p.anim.frame, p.pos, p.flip, {255, 255, 255, u8(p.flash / 0.12 * 200)}, scale)
+			anim_draw_stretched(p.anim.anim, p.anim.frame, p.pos, p.flip, {255, 255, 255, u8(p.flash / 0.12 * 200)}, p.stretch)
 			rl.EndBlendMode()
 		}
 	}

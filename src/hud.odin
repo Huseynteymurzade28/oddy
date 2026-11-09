@@ -1,6 +1,7 @@
 package game
 
 import "core:fmt"
+import "core:math"
 import rl "../libs/raylib"
 
 /*
@@ -101,6 +102,7 @@ hud_draw :: proc(g: ^Game) {
 	case .Title:
 		draw_title_screen(g)
 	case .Playing:
+		draw_iris(g)
 		draw_stats(g)
 		draw_level_name(g)
 		when TOUCH_CONTROLS {
@@ -108,11 +110,40 @@ hud_draw :: proc(g: ^Game) {
 			draw_pause_button(g)
 		}
 	case .Paused:
+		draw_iris(g)
 		draw_stats(g)
 		draw_pause_screen(g)
 	case .Cleared:
 		draw_end_screen(g)
 	}
+}
+
+// A closing circle when you die and an opening one when you come back (and
+// when a level starts), centred on you: the cut back to the checkpoint is
+// never a jump in the dark.
+@(private = "file")
+draw_iris :: proc(g: ^Game) {
+	p := g.player
+	open: f32 = 1
+	switch {
+	case p.dead:
+		open = clamp((p.death_timer - 0.04) / (DEATH_TIME * 0.5), 0, 1)
+	case p.respawn_time > 0:
+		open = 1 - p.respawn_time / RESPAWN_TIME
+	}
+	if open >= 1 {
+		return
+	}
+	open = open * open * (3 - 2 * open)
+	sw, sh := f32(rl.GetScreenWidth()), f32(rl.GetScreenHeight())
+	centre := rl.GetWorldToScreen2D(player_centre(p), g.camera)
+	far := math.sqrt(sw * sw + sh * sh) * 1.2
+	ink := rl.Color{14, 10, 22, 255}
+	if open <= 0 {
+		rl.DrawRectangle(0, 0, i32(sw), i32(sh), ink)
+		return
+	}
+	rl.DrawRing(centre, far * open, far * 2, 0, 360, 72, ink)
 }
 
 // The clock, and how many times this level has killed you.

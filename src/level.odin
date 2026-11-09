@@ -161,7 +161,8 @@ level_update :: proc(g: ^Game) {
 		animator_restart(&c.anim, &g.assets.marks.flag_out)
 		g.respawn = c.pos
 		spawn_burst(g, c.pos - {0, 20}, {255, 230, 140, 255}, 14, 90, 1.2)
-		play(&g.assets, .Coin)
+		play(&g.assets, .Checkpoint)
+		haptic(.Checkpoint)
 	}
 	if rl.CheckCollisionRecs(pr, flag_rect(g.level.exit, EXIT_REACH)) {
 		level_clear(g)
@@ -181,7 +182,8 @@ level_clear :: proc(g: ^Game) {
 	}
 	spawn_burst(g, g.level.exit - {0, 24}, {255, 214, 110, 255}, 30, 140, 1.5)
 	animator_restart(&g.exit_anim, &g.assets.marks.end_pressed)
-	play(&g.assets, .Power_Up)
+	play(&g.assets, .Clear)
+	haptic(.Clear)
 	game_set_state(g, .Cleared)
 }
 

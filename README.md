@@ -1,51 +1,39 @@
 # Oddy
 
-A hard, precision platformer in Odin + raylib, for desktop and Android. Dash,
-wall-jump and climb your way down through the layers of the Hollow: one touch
-of anything sharp and you are back at the last checkpoint, the clock still
-running.
+*(working title)*
 
-```
-tools/build_raylib.sh linux      # once: builds the raylib the game links
-odin run src -out:oddy
-```
+A hard, precision platformer for Android phones. Dash, wall-jump and climb
+down through the layers of the Hollow: one touch of anything sharp and you are
+back at the last checkpoint, with the clock still running and the death count
+one higher.
 
-Asset paths are relative to the working directory, so run it from the repo root.
-For a phone, see [Android](#android).
+Built in [Odin](https://odin-lang.org) on [raylib](https://www.raylib.com), as
+a NativeActivity with no Java.
 
-## Where it is
+| | |
+|---|---|
+| ![First steps](media/first_steps.png) | ![Saws, fire and a rino](media/traps.png) |
+| ![A moving platform under a bat](media/platform.png) | ![Up a fan, over spikes](media/fan.png) |
 
-Oddy used to be a procedural run-based shooter (that version is on `main`). The
-`platformer` branch is rebuilding it as a hand-made world-map platformer: three
-worlds of five levels each, the last of each a boss you beat without a gun.
+## Play it
 
-1. **Movement** — done: no guns, no procedural rooms; coyote time, jump
-   buffering, variable jump height, wall jumps, an 8-way dash, one-hit deaths
-   with an instant respawn.
-2. **LDtk levels** — done: `levels/oddy.ldtk`, with levels 1-1 and 1-2.
-3. **Traps, moving pieces and creatures** — done: saws, moving and falling
-   platforms, trampolines, fans, fire, arrow shooters, dash balloons, a
-   spiked head that drops on you; pigs, slimes, rinos, bats and bees to land
-   on. Level 1-3 has one of each.
-4. The world map, saving, fruit, medals, secret exits, skins.
-5. The fifteen levels and the three bosses.
-6. Art, music and sound.
+Download `oddy-<version>.apk` from the [Releases](../../releases) page and
+open it on the phone (Android 10 or newer, arm64); the phone will ask to allow
+installs from wherever you opened it. Every push to `main` also builds an APK,
+attached to its run on the [Actions](../../actions) page.
 
 ## Controls
 
-| Desktop | Phone | |
+| Phone | | Keyboard (development) |
 |---|---|---|
-| `A` `D` / arrows | left thumb, anywhere on the left half | move |
-| `W` `S` / arrows | the same stick, up and down | aim the dash; down drops through a platform |
-| `Space` (or `C`, `J`) | the green button | jump; against a wall, wall jump. Let go early for a short hop |
-| `Shift` (or `X`, `K`) | the blue button | dash the way you are aiming, or the way you face |
-| `P` / `Esc` | Back, or the pause button in the corner | pause |
-| arrows + `Enter`, or click | tap | menu buttons |
-| `F11` | | fullscreen |
-| `F5` | | read the levels file again (see [Editing levels](#editing-levels)) |
+| left thumb, anywhere on the left half | move | `A` `D` / arrows |
+| the same stick, any of eight ways | aim the dash; pulled down, drop through a platform. A wedge on the rim shows where a dash would go | `W` `S` / arrows |
+| the green button | jump, and off walls. On a phone every jump is full height | `Space` (or `C`, `J`); let go early for a short hop |
+| the blue button | dash; dimmed while it is spent | `Shift` (or `X`, `K`) |
+| Back, or the pause button in the corner | pause | `P` / `Esc` |
 
-The touch layout can be tried on a desktop with the mouse as one finger:
-`odin run src -define:TOUCH=true -out:oddy`.
+The phone buzzes on a dash, when you land on a creature, at a checkpoint, on
+a death and at the end of a level.
 
 ## Movement
 
@@ -64,6 +52,61 @@ The touch layout can be tried on a desktop with the mouse as one finger:
 - **Numbers.** A jump clears four and a half tiles up and about six and a half
   across at a run; jump and dash at the top about nine; jump and dash straight
   up about eight high.
+
+## Where it is
+
+Oddy started as a procedural run-based shooter for desktop (that version is
+tagged `shooter-final`). It is being rebuilt as a hand-made world-map
+platformer for phones: three worlds of five levels each, the last of each a
+boss you beat without a gun.
+
+1. **Movement** — done: coyote time, jump buffering, variable jump height,
+   wall jumps, an 8-way dash, super and hyper jumps, one-hit deaths with an
+   instant respawn.
+2. **LDtk levels** — done: `levels/oddy.ldtk`.
+3. **Traps, moving pieces and creatures** — done: saws, moving and falling
+   platforms, trampolines, fans, fire, arrow shooters, dash balloons, a
+   spiked head that drops on you; pigs, slimes, rinos, bats and bees to land
+   on. Levels 1-1 to 1-3.
+4. **Feel** — done: squash and stretch, dust, puffs to vanish and arrive in,
+   an iris on every death and respawn, CC0 sound effects, vibration.
+5. The world map, saving, fruit, medals, secret exits, skins.
+6. The fifteen levels and the three bosses.
+7. Music per world, more art, the name.
+
+## Building
+
+```
+tools/build_raylib.sh android    # once: raylib for arm64, with the NDK
+tools/build_android.sh           # build/oddy.apk
+tools/build_android.sh run       # ...then install it on the connected phone and start it
+```
+
+Needs [Odin](https://odin-lang.org) (`dev-2026-10`, as CI uses), the Android
+SDK (build-tools, a platform, the NDK) under `ANDROID_HOME` or
+`~/Android/Sdk`, and a JDK for `apksigner`. The script signs with the debug key
+Android Studio makes, or with `ODDY_KEYSTORE` (password `ODDY_KEYSTORE_PASS`).
+
+CI (`.github/workflows/android.yml`) does the same on GitHub's runners for
+every push and pull request, and for a tag `v*` puts the APK on a release. With
+repository secrets `ODDY_KEYSTORE_B64` (the keystore, base64) and
+`ODDY_KEYSTORE_PASS` it signs with that key, so each release installs over the
+last; without them every build is signed with a throwaway key and has to be
+installed fresh.
+
+### On the desktop, for development
+
+The same code runs in a window on Linux, which is the quick way to work on
+levels and movement. It is a development tool, not a release.
+
+```
+tools/build_raylib.sh linux      # once
+odin run src -out:oddy           # keyboard
+odin run src -out:oddy -define:TOUCH=true   # the phone's touch layout, with the mouse as one finger
+```
+
+Run it from the repo root (asset paths are relative). `F5` reads the levels
+file again, `F11` toggles fullscreen.
 
 ## Editing levels
 
@@ -106,29 +149,6 @@ level you are on.
 Anything else in the file is ignored by the game. If the file cannot be read,
 the game starts in a bare room whose hint says why.
 
-## Android
-
-```
-tools/build_raylib.sh android    # once: raylib for arm64, with the NDK
-tools/build_android.sh           # build/oddy.apk
-tools/build_android.sh run       # ...and install it on the connected phone and start it
-```
-
-Needs the Android SDK (build-tools, a platform, the NDK) under `ANDROID_HOME` or
-`~/Android/Sdk`, and a JDK for `apksigner`. The APK is signed with the debug key
-Android Studio makes, so it installs from `adb` or a file but is not a store
-build. It is an arm64 NativeActivity with no Java: raylib's own Android glue
-calls into the Odin library (see `src/main_android.odin`), and the assets ship
-in the APK as they are in the repo.
-
-## raylib
-
-The game links raylib 6.0 statically, built from raylib's source by
-`tools/build_raylib.sh` into `libs/raylib/<platform>/` (the libraries are not
-checked in). `libs/raylib/` also holds a copy of Odin's raylib bindings with the
-library paths pointed there, so a build does not depend on what the system's
-Odin or raylib package happens to ship.
-
 ## Layout
 
 Code is one Odin package in `src/`. Odin makes a directory a package, and this
@@ -139,6 +159,7 @@ nothing but import cycles, so files are grouped by prefix instead.
 |---|---|
 | `main.odin` | window setup and the main loop |
 | `main_android.odin` | the entry point raylib calls on Android |
+| `haptics.odin` | vibration on a phone (the C side is `android/native/haptics.c`) |
 | `game.odin` | the `Game` struct, update order, draw order |
 | `input.odin` | keyboard and touch, read into one `Input` per frame |
 | `player.odin` | movement, jumps, the dash, death and respawn |
@@ -153,7 +174,7 @@ nothing but import cycles, so files are grouped by prefix instead.
 | `zone.odin` | the three worlds and how each one looks |
 | `decor.odin` | torches, roots, stalactites, crystals, drifting motes |
 | `atmosphere.odin` | sun shafts, the glow off water and lava |
-| `fx.odin` | sparks: dust, dash puffs, death bursts |
+| `fx.odin` | sparks and puffs: dust, dash bursts, the puff you vanish and arrive in |
 | `lore.odin` | every line of prose in the game |
 | `animation.odin` | sprite sheets and the animation player |
 | `assets.odin` | every file the game loads, in one place |
@@ -162,13 +183,21 @@ nothing but import cycles, so files are grouped by prefix instead.
 | `hud_screens.odin` | title, how-to-play, pause and level-clear boards |
 | `ui.odin` | menu buttons and boards: layout, press handling, nine-slicing |
 
-## Assets
+Outside `src/`: `levels/` is the LDtk project, `android/` the manifest,
+launcher icon and the native helper, `tools/` the build scripts, and
+`.github/workflows/android.yml` the CI that builds the APK.
 
-See `assets/CREDITS.md`. Everything under `assets/` is loaded by `assets.odin`
-and nothing else opens a file, so moving or replacing art is a one-file change.
+## raylib
 
-`assets/sprites/objects/` splits two ways: `animated/` holds the sprite sheets
-that play (the flag), and the sibling folders are numbered still images kept
-for scenery — `grass/`, `bushes/`, `stones/`, `ridges/`,
-`fence/`, `boxes/`, `trees/`, `willows/`, `ladders/`, `pointers/`. They are not
-loaded at the moment.
+The game links raylib 6.0 statically, built from raylib's source by
+`tools/build_raylib.sh` into `libs/raylib/<platform>/` (the libraries are not
+checked in). `libs/raylib/` also holds a copy of Odin's raylib bindings with the
+library paths pointed there, so a build does not depend on what the system's
+Odin or raylib package happens to ship.
+
+## Credits
+
+Art from Pixel Frog's Pixel Adventure 1 and 2 (CC-BY 4.0), menus from Kenney's
+Pixel UI pack (CC0), sound effects from Juhani Junkala's Essential Retro Video
+Game Sound Effects Collection (CC0). The full list, including what is still to
+be replaced, is in `assets/CREDITS.md`.

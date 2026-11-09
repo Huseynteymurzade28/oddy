@@ -1,5 +1,6 @@
 package game
 
+import "core:math/rand"
 import rl "../libs/raylib"
 
 /*
@@ -8,13 +9,49 @@ layout of this file: one folder per thing that owns a set of sprites. Nothing
 else in the code opens a file, so moving or replacing art is a one-file change.
 */
 
+// Juhani Junkala's "Essential Retro Video Game Sound Effects Collection" (CC0).
 Sfx :: enum {
-	Coin,
 	Jump,
-	Hurt,
-	Power_Up,
+	Land,
 	Dash,
+	Death,
+	Respawn,
+	Stomp,
+	Bounce,
+	Checkpoint,
+	Refill,
+	Clear,
+	Slam,
+	Arrow,
+	Menu_Move,
+	Menu_Select,
 }
+
+@(private = "file")
+SFX_FILES := [Sfx]struct {
+	name:   cstring,
+	volume: f32,
+} {
+	.Jump        = {"jump", 0.45},
+	.Land        = {"land", 0.35},
+	.Dash        = {"dash", 0.55},
+	.Death       = {"death", 0.7},
+	.Respawn     = {"respawn", 0.4},
+	.Stomp       = {"stomp", 0.6},
+	.Bounce      = {"bounce", 0.5},
+	.Checkpoint  = {"checkpoint", 0.5},
+	.Refill      = {"refill", 0.45},
+	.Clear       = {"clear", 0.6},
+	.Slam        = {"slam", 0.5},
+	.Arrow       = {"arrow", 0.35},
+	.Menu_Move   = {"menu_move", 0.4},
+	.Menu_Select = {"menu_select", 0.45},
+}
+
+// Sounds that repeat a lot are played a hair off pitch each time, so a run of
+// jumps does not sound like a machine.
+@(private = "file")
+SFX_VARY :: bit_set[Sfx]{.Jump, .Land, .Dash, .Stomp, .Arrow}
 
 Player_Anims :: struct {
 	idle:        Anim,
@@ -24,6 +61,8 @@ Player_Anims :: struct {
 	double_jump: Anim,
 	wall_slide:  Anim,
 	hit:         Anim,
+	appear:      Anim, // the puff you arrive in
+	disappear:   Anim, // the puff you leave in
 }
 
 // Pixel Adventure 1's traps, one field per sheet.
@@ -111,6 +150,10 @@ assets_load :: proc(a: ^Assets) {
 		double_jump = anim_load(P + "double_jump.png", 32, 32, 6, 0.05),
 		wall_slide  = anim_load(P + "wall_slide.png", 32, 32, 5, 0.10, true),
 		hit         = anim_load(P + "hit.png", 32, 32, 7, 0.05),
+		// 96px cells with the puff centred: anchored so `pos` is the feet of
+		// a 32px character standing in the middle.
+		appear      = anim_load(P + "appear.png", 96, 96, 7, 0.045, false, 64),
+		disappear   = anim_load(P + "disappear.png", 96, 96, 7, 0.045, false, 64),
 	}
 
 	T :: "assets/sprites/traps/"
@@ -188,14 +231,11 @@ assets_load :: proc(a: ^Assets) {
 	a.font = rl.LoadFontEx("assets/fonts/pixel_operator_bold.ttf", 8, nil, 0)
 	rl.SetTextureFilter(a.font.texture, .POINT)
 
-	a.sfx[.Coin] = rl.LoadSound("assets/sounds/coin.wav")
-	a.sfx[.Jump] = rl.LoadSound("assets/sounds/jump.wav")
-	a.sfx[.Hurt] = rl.LoadSound("assets/sounds/hurt.wav")
-	a.sfx[.Power_Up] = rl.LoadSound("assets/sounds/power_up.wav")
-	// A stand-in until the new sound pass: the old shot is a fair whoosh.
-	a.sfx[.Dash] = rl.LoadSound("assets/sounds/shoot.wav")
-	rl.SetSoundVolume(a.sfx[.Coin], 0.45)
-	rl.SetSoundVolume(a.sfx[.Dash], 0.35)
+	for sfx in Sfx {
+		f := SFX_FILES[sfx]
+		a.sfx[sfx] = rl.LoadSound(rl.TextFormat("assets/sounds/%s.wav", f.name))
+		rl.SetSoundVolume(a.sfx[sfx], f.volume)
+	}
 
 	for c in Ui_Colour {
 		a.ui.button[c][0] = rl.LoadTexture(rl.TextFormat("assets/ui/button_%s.png", UI_COLOUR_NAMES[c]))
@@ -236,6 +276,8 @@ assets_unload :: proc(a: ^Assets) {
 		&a.player.double_jump,
 		&a.player.wall_slide,
 		&a.player.hit,
+		&a.player.appear,
+		&a.player.disappear,
 	}
 	unload_anims(player[:])
 
@@ -273,5 +315,8 @@ assets_unload :: proc(a: ^Assets) {
 }
 
 play :: proc(a: ^Assets, s: Sfx) {
+	if s in SFX_VARY {
+		rl.SetSoundPitch(a.sfx[s], rand.float32_range(0.93, 1.07))
+	}
 	rl.PlaySound(a.sfx[s])
 }

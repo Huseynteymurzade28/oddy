@@ -37,6 +37,18 @@ draw_touch_controls :: proc(g: ^Game) {
 			knob += d
 		}
 		draw_knob(knob, 12, STICK_COLOUR, held)
+		// Where a dash would go right now: a bright wedge on the rim.
+		if held {
+			d := t.stick_pos - t.stick_origin
+			k: f32 = STICK_RADIUS * 0.6
+			aim := dash_aim(clamp(d.x / k, -1, 1), clamp(d.y / k, -1, 1), g.player.flip)
+			tip := base + aim * (STICK_RADIUS + 7)
+			side := rl.Vector2{-aim.y, aim.x}
+			back := tip - aim * 7
+			colour := DASH_COLOUR
+			colour.a = g.player.dashes > 0 ? 230 : 90
+			tri(tip * s, (back + side * 5) * s, (back - side * 5) * s, colour)
+		}
 		// Little arrows on the pad: it goes every way.
 		a := rl.Color{255, 255, 255, held ? 120 : 80}
 		for d in ([4]rl.Vector2{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {

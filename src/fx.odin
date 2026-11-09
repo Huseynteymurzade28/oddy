@@ -69,3 +69,35 @@ sparks_draw :: proc(g: ^Game) {
 	}
 	rl.EndBlendMode()
 }
+
+// A one-shot animation left in the world: the puff a body vanishes in, or
+// arrives in.
+Poof :: struct {
+	anim: Animator,
+	pos:  rl.Vector2,
+}
+
+spawn_poof :: proc(g: ^Game, anim: ^Anim, pos: rl.Vector2) {
+	p := Poof{pos = pos}
+	animator_restart(&p.anim, anim)
+	append(&g.poofs, p)
+}
+
+poofs_update :: proc(g: ^Game, dt: f32) {
+	live := 0
+	for &p in g.poofs {
+		animator_update(&p.anim, dt)
+		if p.anim.finished {
+			continue
+		}
+		g.poofs[live] = p
+		live += 1
+	}
+	resize(&g.poofs, live)
+}
+
+poofs_draw :: proc(g: ^Game) {
+	for p in g.poofs {
+		animator_draw(p.anim, p.pos, false)
+	}
+}

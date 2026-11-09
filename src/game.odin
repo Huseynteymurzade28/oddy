@@ -30,6 +30,7 @@ Game :: struct {
 	map_tiles:    Tilemap,
 	player:       Player,
 	sparks:       [dynamic]Spark,
+	poofs:        [dynamic]Poof,
 	things:       [dynamic]Thing, // traps and moving pieces
 	enemies:      [dynamic]Enemy,
 	arrows:       [dynamic]Arrow,
@@ -69,6 +70,7 @@ game_destroy :: proc(g: ^Game) {
 	levels_destroy(&g.levels)
 	delete(g.best)
 	delete(g.sparks)
+	delete(g.poofs)
 	delete(g.things)
 	delete(g.enemies)
 	delete(g.arrows)
@@ -134,6 +136,7 @@ game_update_play :: proc(g: ^Game, dt: f32) {
 	enemies_update(g, dt)
 	level_update(g)
 	sparks_update(g, dt)
+	poofs_update(g, dt)
 }
 
 game_set_state :: proc(g: ^Game, state: Game_State) {
@@ -176,6 +179,7 @@ game_draw :: proc(g: ^Game) {
 	things_draw(g)
 	enemies_draw(g)
 	player_draw(g.player, &g.assets)
+	poofs_draw(g)
 	rl.EndMode2D()
 
 	// Everything so far sits in the dark; what comes after it is light itself,

@@ -1,0 +1,96 @@
+# Builds the APK on every push and pull request, and attaches it to a GitHub
+# release whenever a tag like v0.2.0 is pushed.
+#
+# Signing: if the repository has an ODDY_KEYSTORE_B64 secret (a base64'd
+# keystore whose store and key password are in ODDY_KEYSTORE_PASS), the APK is
+# signed with it, so a newer build installs over an older one. Without it a
+# throwaway debug key is made for the run, and each build has to be installed
+# fresh.
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  ODIN_TAG: dev-2026-10
+  RAYLIB_TAG: "6.0"
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Odin
+        run: |
+          curl -sSL -o odin.tar.gz \
+            "https://github.com/odin-lang/Odin/releases/download/$ODIN_TAG/odin-linux-amd64-$ODIN_TAG.tar.gz"
+          mkdir -p "$RUNNER_TEMP/odin"
+          tar xzf odin.tar.gz -C "$RUNNER_TEMP/odin"
+          bin="$(dirname "$(find "$RUNNER_TEMP/odin" -type f -name odin | head -1)")"
+          echo "$bin" >> "$GITHUB_PATH"
+          "$bin/odin" version
+
+      - name: Android NDK
+        run: |
+          echo "ANDROID_NDK=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+          echo "NDK $(basename "$ANDROID_NDK_LATEST_HOME")"
+
+      - name: raylib cache
+        id: raylib
+        uses: actions/cache@v4
+        with:
+          path: libs/raylib/android-arm64/libraylib.a
+          key: raylib-${{ env.RAYLIB_TAG }}-android-${{ hashFiles('tools/build_raylib.sh') }}
+
+      - name: raylib for Android
+        if: steps.raylib.outputs.cache-hit != 'true'
+        run: tools/build_raylib.sh android
+
+      - name: Signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ODDY_KEYSTORE_B64 }}
+          KEYSTORE_PASS: ${{ secrets.ODDY_KEYSTORE_PASS }}
+        run: |
+          ks="$RUNNER_TEMP/oddy.keystore"
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$ks"
+            echo "ODDY_KEYSTORE_PASS=$KEYSTORE_PASS" >> "$GITHUB_ENV"
+          else
+            keytool -genkeypair -keystore "$ks" -storepass android -keypass android \
+              -alias oddy -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Oddy CI"
+          fi
+          echo "ODDY_KEYSTORE=$ks" >> "$GITHUB_ENV"
+
+      - name: Version
+        run: |
+          echo "ODDY_VERSION_CODE=${{ github.run_number }}" >> "$GITHUB_ENV"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "ODDY_VERSION_NAME=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          else
+            echo "ODDY_VERSION_NAME=0.0.${{ github.run_number }}-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build APK
+        run: tools/build_android.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oddy-${{ env.ODDY_VERSION_NAME }}
+          path: build/oddy.apk
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp build/oddy.apk "oddy-$ODDY_VERSION_NAME.apk"
+          gh release create "$GITHUB_REF_NAME" "oddy-$ODDY_VERSION_NAME.apk" \
+            --title "Oddy $ODDY_VERSION_NAME" --generate-notes

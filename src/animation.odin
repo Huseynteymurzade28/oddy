@@ -72,6 +72,17 @@ anim_draw_frame :: proc(
 	rl.DrawTexturePro(a.texture, anim_source(a, frame, flip), dest, origin, 0, tint)
 }
 
+// Like `anim_draw_frame`, but pulled out of shape: wider and shorter, or
+// thinner and taller, always keeping the feet on `pos`.
+anim_draw_stretched :: proc(a: ^Anim, frame: int, pos: rl.Vector2, flip: bool, tint: rl.Color, stretch: rl.Vector2) {
+	if a.texture.id == 0 {
+		return
+	}
+	dest := rl.Rectangle{pos.x, pos.y, a.frame_w * stretch.x, a.frame_h * stretch.y}
+	origin := rl.Vector2{a.frame_w * stretch.x / 2, a.anchor_y * stretch.y}
+	rl.DrawTexturePro(a.texture, anim_source(a, frame, flip), dest, origin, 0, tint)
+}
+
 // Draws one cell centred on `pos` and turned to face `angle` (degrees). Used by
 // anything that points along a heading instead of standing on the ground.
 anim_draw_rotated :: proc(

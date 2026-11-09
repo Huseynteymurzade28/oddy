@@ -172,6 +172,7 @@ menu_update :: proc(g: ^Game) {
 
 	if g.input.nav != 0 {
 		ui.focus = (ui.focus + g.input.nav + len(items)) % len(items)
+		play(&g.assets, .Menu_Move)
 	}
 
 	p := pointer()
@@ -202,7 +203,7 @@ menu_update :: proc(g: ^Game) {
 
 @(private = "file")
 activate :: proc(g: ^Game, action: Menu_Action) {
-	play(&g.assets, .Coin)
+	play(&g.assets, .Menu_Select)
 	switch action {
 	case .None:
 	case .Play:

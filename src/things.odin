@@ -264,6 +264,9 @@ things_update :: proc(g: ^Game, dt: f32) {
 				t.timer += t.data.interval
 				d := rl.Vector2{f32(t.data.dir.x), f32(t.data.dir.y)}
 				append(&g.arrows, Arrow{pos = t.pos + d * 8, vel = d * ARROW_SPEED, life = ARROW_RANGE / ARROW_SPEED})
+				if near_player(g, t.pos) {
+					play(&g.assets, .Arrow)
+				}
 			}
 
 		case .Refill:
@@ -275,7 +278,7 @@ things_update :: proc(g: ^Game, dt: f32) {
 					t.timer = REFILL_RESPAWN
 					animator_restart(&t.anim, &g.assets.traps.refill_pop)
 					spawn_burst(g, t.pos, {255, 240, 200, 255}, 10, 90, 1.1)
-					play(&g.assets, .Coin)
+					play(&g.assets, .Refill)
 				}
 			case 1:
 				t.timer -= dt
@@ -329,6 +332,9 @@ spike_head_update :: proc(g: ^Game, t: ^Thing, dt: f32) {
 			t.state = 2
 			t.timer = HEAD_REST
 			g.shake = max(g.shake, 4)
+			if near_player(g, t.pos) {
+				play(&g.assets, .Slam)
+			}
 			animator_restart(&t.anim, &g.assets.traps.spike_head_hit)
 			spawn_burst(g, {t.pos.x, t.pos.y + HEAD_SIZE / 2}, {200, 190, 170, 255}, 10, 80, 1.0)
 		}
@@ -349,6 +355,13 @@ spike_head_update :: proc(g: ^Game, t: ^Thing, dt: f32) {
 	if !p.dead && rl.CheckCollisionRecs(player_rect(p^), head_rect(t^)) {
 		player_kill(g)
 	}
+}
+
+// Only what is on or near the screen is heard; a level full of shooters
+// would otherwise be a wall of clicks.
+@(private = "file")
+near_player :: proc(g: ^Game, pos: rl.Vector2) -> bool {
+	return rl.Vector2Distance(pos, g.player.pos) < view_size().x * 0.7
 }
 
 head_rect :: proc(t: Thing) -> rl.Rectangle {

@@ -182,7 +182,8 @@ enemy_touch_player :: proc(g: ^Game, e: ^Enemy) {
 		spawn_burst(g, {e.pos.x, er.y}, {255, 255, 255, 255}, 10, 110, 1.2)
 		g.shake = max(g.shake, 2)
 		g.freeze = 0.03
-		play(&g.assets, .Coin)
+		play(&g.assets, .Stomp)
+		haptic(.Stomp)
 		p.pos.y = er.y
 		player_bounce(g, STOMP_BOUNCE)
 		return
