@@ -19,7 +19,9 @@ What the project has to contain (and does, as LDtk saves it):
                Checkpoint    a flag you respawn at once touched
                Exit          the flag that finishes the level
                Hint          a line of text in the world (field `Text`)
-             All four have their pivot at the bottom centre.
+             and the traps and creatures in `things.odin` and `enemy.odin`.
+             Every entity is read as the rectangle LDtk draws for it, so
+             pivots and sizes can be changed in the editor freely.
   levels     each with a `Name` (String) and a `Zone` (enum Mossy, Drowned,
              Ember), and played in the order they are listed in LDtk.
 
@@ -47,6 +49,18 @@ Level_Data :: struct {
 	exit:        rl.Vector2,
 	checkpoints: [dynamic]rl.Vector2,
 	hints:       [dynamic]Hint,
+	things:      [dynamic]Thing_Data, // traps, moving pieces and creatures
+}
+
+// A trap or a creature as placed in LDtk. Which fields mean anything depends
+// on the kind; the rest keep their defaults.
+Thing_Data :: struct {
+	kind:     Thing_Kind,
+	rect:     rl.Rectangle, // the entity's rectangle in the level, in pixels
+	speed:    f32, // px/s along a track
+	interval: f32, // seconds between shots
+	delay:    f32, // seconds before the first one
+	dir:      [2]int, // which way an arrow shooter faces
 }
 
 level_data_destroy :: proc(d: ^Level_Data) {
@@ -58,6 +72,7 @@ level_data_destroy :: proc(d: ^Level_Data) {
 		delete(h.text)
 	}
 	delete(d.hints)
+	delete(d.things)
 	d^ = {}
 }
 
@@ -153,7 +168,12 @@ read_level :: proc(lv: json.Value) -> (d: Level_Data, ok: bool) {
 					continue
 				}
 				pos := rl.Vector2{f32(num(px[0])), f32(num(px[1]))}
-				switch str(get(e, "__identifier")) {
+				ident := str(get(e, "__identifier"))
+				if kind, is_thing := thing_kind_from_name(ident); is_thing {
+					append(&d.things, read_thing(e, kind, pos))
+					continue
+				}
+				switch ident {
 				case "Player_Start":
 					d.spawn = pos
 				case "Checkpoint":
@@ -173,6 +193,58 @@ read_level :: proc(lv: json.Value) -> (d: Level_Data, ok: bool) {
 		}
 	}
 	return
+}
+
+@(private = "file")
+read_thing :: proc(e: json.Value, kind: Thing_Kind, pos: rl.Vector2) -> Thing_Data {
+	w := f32(num(get(e, "width")))
+	h := f32(num(get(e, "height")))
+	pivot := arr(get(e, "__pivot"))
+	px, py: f32 = 0.5, 1
+	if len(pivot) >= 2 {
+		px, py = flt(pivot[0]), flt(pivot[1])
+	}
+	t := Thing_Data {
+		kind     = kind,
+		rect     = {pos.x - px * w, pos.y - py * h, w, h},
+		speed    = 60,
+		interval = 1.6,
+		dir      = {1, 0},
+	}
+	for f in arr(get(e, "fieldInstances")) {
+		v := get(f, "__value")
+		switch str(get(f, "__identifier")) {
+		case "Speed":
+			t.speed = flt(v)
+		case "Interval":
+			t.interval = max(flt(v), 0.2)
+		case "Delay":
+			t.delay = flt(v)
+		case "Dir":
+			switch str(v) {
+			case "Left":
+				t.dir = {-1, 0}
+			case "Up":
+				t.dir = {0, -1}
+			case "Down":
+				t.dir = {0, 1}
+			case:
+				t.dir = {1, 0}
+			}
+		}
+	}
+	return t
+}
+
+// The LDtk entity names are the enum's names, so adding a kind to the enum is
+// all it takes for the reader to know it.
+thing_kind_from_name :: proc(name: string) -> (Thing_Kind, bool) {
+	for k in Thing_Kind {
+		if fmt.tprint(k) == name {
+			return k, true
+		}
+	}
+	return {}, false
 }
 
 // ------------------------------------------------- reading a JSON tree ---
@@ -201,6 +273,17 @@ str :: proc(v: json.Value) -> string {
 		return s
 	}
 	return ""
+}
+
+@(private = "file")
+flt :: proc(v: json.Value) -> f32 {
+	#partial switch n in v {
+	case json.Integer:
+		return f32(n)
+	case json.Float:
+		return f32(n)
+	}
+	return 0
 }
 
 @(private = "file")

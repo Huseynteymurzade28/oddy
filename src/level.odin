@@ -13,6 +13,7 @@ what changes while you play it: which checkpoints are lit.
 Checkpoint :: struct {
 	pos:    rl.Vector2, // the foot of the flag, which is also where you respawn
 	active: bool,
+	anim:   Animator, // the flag going up, then flying
 }
 
 Level :: struct {
@@ -102,12 +103,28 @@ level_enter :: proc(g: ^Game, wanted: int) {
 		append(&g.level.checkpoints, Checkpoint{pos = c})
 	}
 	g.bg_tint = {}
+	g.exit_anim = {}
 	decor_scatter(g)
 	level_restart(g)
 }
 
 level_has_next :: proc(g: ^Game) -> bool {
 	return g.level.index + 1 < len(g.levels)
+}
+
+// Puts every trap and creature back where the level file has it. Done on
+// every death, so a section plays the same way each time.
+level_reset_things :: proc(g: ^Game) {
+	clear(&g.things)
+	clear(&g.enemies)
+	clear(&g.arrows)
+	for d in g.levels[g.level.index].things {
+		if d.kind >= FIRST_CREATURE {
+			append(&g.enemies, enemy_make(d))
+		} else {
+			append(&g.things, thing_make(d))
+		}
+	}
 }
 
 // Puts the level back the way it was at the start: checkpoints unlit, the
@@ -121,6 +138,7 @@ level_restart :: proc(g: ^Game) {
 	g.level_time = 0
 	g.level_intro = LEVEL_INTRO_TIME
 	clear(&g.sparks)
+	level_reset_things(g)
 	player_init(&g.player, g.respawn)
 	camera_snap(g)
 }
@@ -140,6 +158,7 @@ level_update :: proc(g: ^Game) {
 			other.active = false
 		}
 		c.active = true
+		animator_restart(&c.anim, &g.assets.marks.flag_out)
 		g.respawn = c.pos
 		spawn_burst(g, c.pos - {0, 20}, {255, 230, 140, 255}, 14, 90, 1.2)
 		play(&g.assets, .Coin)
@@ -161,24 +180,34 @@ level_clear :: proc(g: ^Game) {
 		best.deaths = min(best.deaths, g.deaths)
 	}
 	spawn_burst(g, g.level.exit - {0, 24}, {255, 214, 110, 255}, 30, 140, 1.5)
+	animator_restart(&g.exit_anim, &g.assets.marks.end_pressed)
 	play(&g.assets, .Power_Up)
 	game_set_state(g, .Cleared)
 }
 
 level_draw_flags :: proc(g: ^Game) {
-	anim := &g.assets.flag
-	frame := int(g.time / max(anim.frame_time, 0.01)) % max(anim.count, 1)
-	for c in g.level.checkpoints {
-		// An unlit checkpoint is a still, grey flag; a lit one waves.
-		if c.active {
-			anim_draw_frame(anim, frame, c.pos, false)
-		} else {
-			anim_draw_frame(anim, 0, c.pos, false, {120, 120, 140, 255})
+	m := &g.assets.marks
+	for &c in g.level.checkpoints {
+		// The pole stands 8px left of the middle of its 64px cell.
+		pos := c.pos + {8, 0}
+		switch {
+		case !c.active:
+			anim_draw_frame(&m.pole, 0, pos, false)
+		case c.anim.anim == &m.flag_out && !c.anim.finished:
+			animator_update(&c.anim, rl.GetFrameTime())
+			animator_draw(c.anim, pos, false)
+		case:
+			frame := int(g.time / 0.07) % 10
+			anim_draw_frame(&m.flag, frame, pos, false)
 		}
 	}
-	anim_draw_frame(anim, frame, g.level.exit, false, {255, 214, 110, 255})
+	if g.exit_anim.anim != nil {
+		animator_update(&g.exit_anim, rl.GetFrameTime())
+		animator_draw(g.exit_anim, g.level.exit, false)
+	} else {
+		anim_draw_frame(&m.end, 0, g.level.exit, false)
+	}
 }
-
 
 // The hints float over the level in its own small type, lit or not.
 level_draw_hints :: proc(g: ^Game) {

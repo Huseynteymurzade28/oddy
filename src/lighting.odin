@@ -137,6 +137,24 @@ gather_lights :: proc(g: ^Game) {
 		}
 	}
 
+	for t in g.things {
+		if !near(view, t.pos, 60) {
+			continue
+		}
+		#partial switch t.kind {
+		case .Fire:
+			if t.state == 2 {
+				light(t.pos - {0, 22}, 46 + math.sin(g.time * 17) * 3, {220, 120, 50, 255})
+			} else if t.state == 1 {
+				light(t.pos - {0, 18}, 22, {160, 90, 40, 255})
+			}
+		case .Refill:
+			if t.state == 0 {
+				light(t.pos, 26, {120, 150, 190, 255})
+			}
+		}
+	}
+
 	// Checkpoints glow once they are lit, and the flag at the end always does.
 	for c in g.level.checkpoints {
 		if c.active && near(view, c.pos, 60) {

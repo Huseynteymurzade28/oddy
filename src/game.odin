@@ -30,6 +30,9 @@ Game :: struct {
 	map_tiles:    Tilemap,
 	player:       Player,
 	sparks:       [dynamic]Spark,
+	things:       [dynamic]Thing, // traps and moving pieces
+	enemies:      [dynamic]Enemy,
+	arrows:       [dynamic]Arrow,
 	decor:        [dynamic]Decor, // torches, roots, crystals: drawn in code, mostly lit
 	motes:        [dynamic]Mote, // what drifts through the air
 	liquid_glows: [dynamic]rl.Vector2, // points along lava that light the level
@@ -40,6 +43,7 @@ Game :: struct {
 	shake:        f32,
 	freeze:       f32, // a few hundredths of a second where nothing moves
 	camera:       rl.Camera2D,
+	exit_anim:    Animator, // the trophy at the end, once pressed
 
 	// this attempt at the level
 	respawn:      rl.Vector2, // the last checkpoint touched, or the start
@@ -65,6 +69,9 @@ game_destroy :: proc(g: ^Game) {
 	levels_destroy(&g.levels)
 	delete(g.best)
 	delete(g.sparks)
+	delete(g.things)
+	delete(g.enemies)
+	delete(g.arrows)
 	delete(g.decor)
 	delete(g.motes)
 	delete(g.liquid_glows)
@@ -122,7 +129,9 @@ game_update_play :: proc(g: ^Game, dt: f32) {
 	if !g.player.dead {
 		g.level_time += dt
 	}
+	things_update(g, dt)
 	player_update(g, dt)
+	enemies_update(g, dt)
 	level_update(g)
 	sparks_update(g, dt)
 }
@@ -164,6 +173,8 @@ game_draw :: proc(g: ^Game) {
 	tilemap_draw(g, view)
 	decor_draw(g)
 	level_draw_flags(g)
+	things_draw(g)
+	enemies_draw(g)
 	player_draw(g.player, &g.assets)
 	rl.EndMode2D()
 

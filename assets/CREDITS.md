@@ -8,7 +8,7 @@ the pixels are unchanged.
 |---|---|---|---|
 | `sprites/player/` (Virtual Guy) | [Pixel Adventure 1](https://opengameart.org/content/pixel-adventure-1) | Pixel Frog | CC-BY 4.0 |
 | `sprites/enemies/` (pig, slime, rhino, bat, ghost, bee, rocks) | [Pixel Adventure 2](https://opengameart.org/content/pixel-adventure-2) | Pixel Frog | CC-BY 4.0 |
-| `sprites/tileset.png` rows 12-23 (the earth, brick and wooden platforms), `sprites/objects/animated/flag.png` | [Pixel Adventure 1](https://opengameart.org/content/pixel-adventure-1) | Pixel Frog | CC-BY 4.0 |
+| `sprites/tileset.png` rows 12-23 (the earth, brick and wooden platforms), `sprites/traps/` (saw, spikes, trampoline, platforms, fan, fire, balloon, spiked head), `sprites/objects/checkpoint/` | [Pixel Adventure 1](https://opengameart.org/content/pixel-adventure-1) | Pixel Frog | CC-BY 4.0 |
 
 `enemies/rock/*_hit.png`, `big_break.png`, `small_death.png` and `slam.png` are
 the pack's one-frame hit poses repeated with a pixel or two of sideways shake,
@@ -31,6 +31,6 @@ pack's terrain sheet into the 6x6 blocks `tilemap.odin` reads.
   that folder are Odin's `vendor:raylib` bindings (Odin is BSD-3-Clause), copied
   with only the library paths changed.
 - The torches, roots, stalactites, crystals, mushrooms, drifting motes, the
-  lighting, sun shafts, the spikes, the touch controls and the Android
+  lighting, sun shafts, the arrow shooters and arrows, the fan's air, the touch controls and the Android
   launcher icon (Virtual Guy on a drawn sky) are drawn in code for this
   project; no third-party art was added for them.

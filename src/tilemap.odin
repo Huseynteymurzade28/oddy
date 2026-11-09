@@ -275,7 +275,7 @@ tilemap_draw :: proc(g: ^Game, view: rl.Rectangle) {
 			case .Platform:
 				src = platform_source(m, x, y)
 			case .Spike:
-				draw_spike(m, x, y)
+				draw_spike(g, x, y)
 				continue
 			case .Rock, .Deep, .Moss:
 				src = solid_source(m, x, y, t, zone)
@@ -287,32 +287,22 @@ tilemap_draw :: proc(g: ^Game, view: rl.Rectangle) {
 	}
 }
 
-// Spikes are drawn in code until the trap art arrives: three steel teeth on a
-// base plate, pointing away from their rock.
+// Pixel Adventure's spikes point up from the bottom of their cell; any other
+// way is the same sprite turned.
 @(private = "file")
-draw_spike :: proc(m: ^Tilemap, x, y: int) {
-	d := spike_dir(m, x, y)
-	dir := rl.Vector2{f32(d.x), f32(d.y)}
-	side := rl.Vector2{-dir.y, dir.x} // along the base
-	centre := rl.Vector2{f32(x) * TILE + TILE / 2, f32(y) * TILE + TILE / 2}
-	base := centre - dir * (TILE / 2)
-
-	steel := rl.Color{196, 204, 220, 255}
-	shade := rl.Color{104, 112, 134, 255}
-	plate := rl.Color{70, 66, 84, 255}
-	for i in 0 ..< 3 {
-		along := (f32(i) - 1) * (TILE / 3)
-		b := base + side * along
-		tip := b + dir * 9
-		l := b + side * (TILE / 6)
-		r := b - side * (TILE / 6)
-		tri(l, r, tip, steel)
-		tri(b, r, tip, shade) // one face in shadow, so the teeth read as 3D
+draw_spike :: proc(g: ^Game, x, y: int) {
+	d := spike_dir(&g.map_tiles, x, y)
+	angle: f32
+	switch d {
+	case {0, 1}:
+		angle = 180
+	case {1, 0}:
+		angle = 90
+	case {-1, 0}:
+		angle = 270
 	}
-	// The base plate.
-	p0 := base - side * (TILE / 2)
-	p1 := base + side * (TILE / 2)
-	q := dir * 2
-	tri(p0, p1, p1 + q, plate)
-	tri(p0, p1 + q, p0 + q, plate)
+	tex := g.assets.traps.spikes
+	src := rl.Rectangle{0, 0, f32(tex.width), f32(tex.height)}
+	dest := rl.Rectangle{f32(x) * TILE + TILE / 2, f32(y) * TILE + TILE / 2, TILE, TILE}
+	rl.DrawTexturePro(tex, src, dest, {TILE / 2, TILE / 2}, angle, rl.WHITE)
 }

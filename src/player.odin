@@ -89,6 +89,8 @@ Player :: struct {
 	trail_timer:  f32,
 	flash:        f32, // the white flash when a dash comes back
 
+	riding:       int, // the platform in `g.things` stood on, or -1
+
 	dead:         bool,
 	death_timer:  f32,
 	respawn_time: f32,
@@ -101,6 +103,7 @@ player_init :: proc(p: ^Player, spawn: rl.Vector2) {
 		dashes       = 1,
 		since_dash   = 1,
 		respawn_time = RESPAWN_TIME,
+		riding       = -1,
 	}
 }
 
@@ -153,6 +156,12 @@ player_update :: proc(g: ^Game, dt: f32) {
 		return
 	}
 	p.respawn_time = max(0, p.respawn_time - dt)
+
+	// A platform you are standing on takes you with it.
+	if p.riding >= 0 && p.riding < len(g.things) {
+		p.pos += g.things[p.riding].delta
+	}
+	p.riding = -1
 
 	in_ := g.input
 	move := in_.move
@@ -326,6 +335,14 @@ player_update :: proc(g: ^Game, dt: f32) {
 	grounded, bumped_head: bool
 	pre := r
 	r, grounded, bumped_head = move_y(m, r, p.vel.y * dt, in_.down && !dashing)
+	if !grounded && p.vel.y >= 0 && !in_.down {
+		if top, index, ok := platform_landing(g, pre.y + PLAYER_H, r); ok {
+			r.y = top - PLAYER_H
+			grounded = true
+			p.riding = index
+			g.things[index].ridden = true
+		}
+	}
 	if bumped_head {
 		// Corner nudge: a head that only clipped the edge of a tile slides
 		// sideways past it and the jump carries on.
@@ -349,6 +366,15 @@ player_update :: proc(g: ^Game, dt: f32) {
 		// Nothing moved down this frame (a sideways dash has no gravity), so
 		// ask for the ground directly.
 		grounded = on_ground(m, r)
+		if !grounded && !in_.down {
+			probe := r
+			probe.y += 1
+			if _, index, ok := platform_landing(g, r.y + PLAYER_H, probe); ok {
+				grounded = true
+				p.riding = index
+				g.things[index].ridden = true
+			}
+		}
 	}
 	if bumped_head {
 		p.vel.y = 0
@@ -394,6 +420,40 @@ start_jump :: proc(p: ^Player) {
 	p.jump_buffer = 0
 	p.holding_jump = true
 	p.jump_time = 0
+}
+
+// Moving and falling platforms are one-way: they catch feet that were at or
+// above their top before this frame's move, and nothing else.
+@(private = "file")
+platform_landing :: proc(g: ^Game, feet_before: f32, r: rl.Rectangle) -> (top: f32, index: int, ok: bool) {
+	for t, i in g.things {
+		pr, solid := platform_rect(t)
+		if !solid || r.x >= pr.x + pr.width || r.x + r.width <= pr.x {
+			continue
+		}
+		if feet_before <= pr.y + 1 + max(0, -t.delta.y) && r.y + r.height >= pr.y {
+			return pr.y, i, true
+		}
+	}
+	return 0, -1, false
+}
+
+// Thrown upward by something: a trampoline, or a creature underfoot. It is a
+// full-height launch however jump is held, and the dash comes back with it.
+player_bounce :: proc(g: ^Game, speed: f32) {
+	p := &g.player
+	p.vel.y = -speed
+	p.dash_time = 0
+	p.grounded = false
+	p.coyote = 0
+	p.holding_jump = false
+	p.jump_buffer = 0
+	p.riding = -1
+	p.dashes = 0
+	player_refill_dash(p)
+	animator_restart(&p.anim, &g.assets.player.double_jump)
+	spawn_burst(g, p.pos, {230, 240, 255, 255}, 6, 70, 1.0)
+	play(&g.assets, .Jump)
 }
 
 // Gives the dash back, with a flash so you can see it happen.
@@ -490,6 +550,7 @@ player_kill :: proc(g: ^Game) {
 
 @(private = "file")
 player_respawn :: proc(g: ^Game) {
+	level_reset_things(g)
 	player_init(&g.player, g.respawn)
 	spawn_burst(g, player_centre(g.player), {200, 230, 255, 255}, 12, 80, 1.0)
 }

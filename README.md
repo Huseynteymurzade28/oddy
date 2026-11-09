@@ -23,7 +23,10 @@ worlds of five levels each, the last of each a boss you beat without a gun.
    buffering, variable jump height, wall jumps, an 8-way dash, one-hit deaths
    with an instant respawn.
 2. **LDtk levels** — done: `levels/oddy.ldtk`, with levels 1-1 and 1-2.
-3. Traps, moving pieces and enemies you stomp.
+3. **Traps, moving pieces and creatures** — done: saws, moving and falling
+   platforms, trampolines, fans, fire, arrow shooters, dash balloons, a
+   spiked head that drops on you; pigs, slimes, rinos, bats and bees to land
+   on. Level 1-3 has one of each.
 4. The world map, saving, fruit, medals, secret exits, skins.
 5. The fifteen levels and the three bosses.
 6. Art, music and sound.
@@ -73,9 +76,29 @@ level you are on.
   (they point away from the rock beside them), `4` water. Only the shape is
   drawn; the game picks the grass, edges and corners itself from which
   neighbours are rock.
-- **Entities**: `Player_Start` (one per level), `Checkpoint`, `Exit` (the flag
-  that finishes the level), and `Hint`, a line of text floating in the level
-  (its `Text` field).
+- **Entities**: `Player_Start` (one per level), `Checkpoint`, `Exit` (the
+  trophy that finishes the level), `Hint`, a line of text floating in the
+  level (its `Text` field), and the traps and creatures:
+
+  | Entity | |
+  |---|---|
+  | `Saw` | resize it into a track; the saw runs end to end along its long side (`Speed`) |
+  | `Moving_Platform` | the same, with a platform you can stand on |
+  | `Falling_Platform` | drops a moment after you land on it, then grows back |
+  | `Trampoline` | throws you high and gives the dash back |
+  | `Fan` | blows you up as far as its height |
+  | `Fire` | put it over a floor tile: it lights a moment after you step on it |
+  | `Arrow_Shooter` | `Dir`, `Interval`, `Delay`; arrows fly about 18 tiles |
+  | `Refill` | gives a spent dash back, then grows back |
+  | `Spike_Head` | shudders, then drops when you are under it, and climbs back |
+  | `Pig`, `Slime` | walk back and forth, turning at walls and edges |
+  | `Rino` | charges when you are level with it, dazed when it hits a wall |
+  | `Bat` | swings three tiles either side of where it is placed |
+  | `Bee` | bobs up and down |
+
+  Land on a creature to kill it: you bounce and get the dash back. Touching
+  one any other way, or any trap, is a death. Everything is put back as it
+  started each time you die.
 - **Level fields**: `Name`, shown when the level starts and on the clear card,
   and `Zone` (`Mossy`, `Drowned`, `Ember`), which picks the colours, the light
   and what drifts through the air.
@@ -122,6 +145,8 @@ nothing but import cycles, so files are grouped by prefix instead.
 | `physics.odin` | axis-separated AABB vs tiles, one-way platforms |
 | `ldtk.odin` | reading `levels/oddy.ldtk` |
 | `level.odin` | the level being played: checkpoints, the flag, hints, best clears |
+| `things.odin` | traps and moving pieces |
+| `enemy.odin` | the creatures, and landing on them |
 | `tilemap.odin` | tile grid, spikes, materials, nine-slicing, drawing |
 | `camera.odin` | virtual resolution, the following camera, parallax, vignette |
 | `lighting.odin` | the light map and every light in it |

@@ -26,9 +26,47 @@ Player_Anims :: struct {
 	hit:         Anim,
 }
 
+// Pixel Adventure 1's traps, one field per sheet.
+Trap_Anims :: struct {
+	saw:              Anim,
+	chain:            rl.Texture2D,
+	spikes:           rl.Texture2D,
+	trampoline:       Anim,
+	trampoline_jump:  Anim,
+	falling_platform: Anim,
+	fan:              Anim,
+	fire_off:         Anim,
+	fire_hit:         Anim,
+	fire_on:          Anim,
+	platform:         Anim,
+	refill:           Anim,
+	refill_pop:       Anim,
+	spike_head:       Anim,
+	spike_head_blink: Anim,
+	spike_head_hit:   Anim,
+}
+
+// Every creature in Pixel Adventure 2 ships about the same states; ones
+// without a distinct walk point both fields at the same sheet.
+Creature_Anims :: struct {
+	idle: Anim,
+	run:  Anim,
+	hit:  Anim,
+}
+
+Checkpoint_Anims :: struct {
+	pole:        Anim, // not yet reached
+	flag_out:    Anim, // the flag going up
+	flag:        Anim, // flying
+	end:         Anim, // the trophy at the end of a level
+	end_pressed: Anim,
+}
+
 Assets :: struct {
 	player:  Player_Anims,
-	flag:    Anim,
+	traps:   Trap_Anims,
+	enemy:   [Enemy_Kind]Creature_Anims,
+	marks:   Checkpoint_Anims,
 	tileset: rl.Texture2D,
 	layers:  [BG_LAYERS]rl.Texture2D,
 	font:    rl.Font,
@@ -75,7 +113,67 @@ assets_load :: proc(a: ^Assets) {
 		hit         = anim_load(P + "hit.png", 32, 32, 7, 0.05),
 	}
 
-	a.flag = anim_load("assets/sprites/objects/animated/flag.png", 64, 64, 10, 0.07, true)
+	T :: "assets/sprites/traps/"
+	a.traps = {
+		saw              = anim_load(T + "saw.png", 38, 38, 8, 0.04, true),
+		chain            = rl.LoadTexture(T + "chain.png"),
+		spikes           = rl.LoadTexture(T + "spikes.png"),
+		trampoline       = anim_load(T + "trampoline_idle.png", 28, 28, 1),
+		trampoline_jump  = anim_load(T + "trampoline_jump.png", 28, 28, 8, 0.04),
+		falling_platform = anim_load(T + "falling_platform.png", 32, 10, 4, 0.06, true),
+		fan              = anim_load(T + "fan.png", 24, 8, 4, 0.03, true),
+		fire_off         = anim_load(T + "fire_off.png", 16, 32, 1),
+		fire_hit         = anim_load(T + "fire_hit.png", 16, 32, 4, 0.08, true),
+		fire_on          = anim_load(T + "fire_on.png", 16, 32, 3, 0.07, true),
+		platform         = anim_load(T + "platform.png", 32, 8, 8, 0.05, true),
+		refill           = anim_load(T + "refill_idle.png", 18, 18, 10, 0.07, true),
+		refill_pop       = anim_load(T + "refill_hit.png", 18, 18, 4, 0.06),
+		spike_head       = anim_load(T + "spike_head_idle.png", 54, 52, 1),
+		spike_head_blink = anim_load(T + "spike_head_blink.png", 54, 52, 4, 0.08),
+		spike_head_hit   = anim_load(T + "spike_head_hit.png", 54, 52, 4, 0.07),
+	}
+
+	C :: "assets/sprites/objects/checkpoint/"
+	a.marks = {
+		pole        = anim_load(C + "pole.png", 64, 64, 1),
+		flag_out    = anim_load(C + "flag_out.png", 64, 64, 26, 0.03),
+		flag        = anim_load(C + "flag_idle.png", 64, 64, 10, 0.07, true),
+		end         = anim_load(C + "end_idle.png", 64, 64, 1),
+		end_pressed = anim_load(C + "end_pressed.png", 64, 64, 8, 0.06),
+	}
+
+	// The creatures face left in the sheets. Fliers are anchored at the
+	// bottom of the body, not of the cell.
+	E :: "assets/sprites/enemies/"
+	pig_run := anim_load(E + "pig/run.png", 36, 30, 12, 0.05, true)
+	a.enemy[.Pig] = {
+		idle = anim_load(E + "pig/idle.png", 36, 30, 9, 0.08, true),
+		run  = pig_run,
+		hit  = anim_load(E + "pig/hit.png", 36, 30, 5, 0.06),
+	}
+	slime := anim_load(E + "slime/move.png", 44, 30, 10, 0.07, true)
+	a.enemy[.Slime] = {
+		idle = slime,
+		run  = slime,
+		hit  = anim_load(E + "slime/hit.png", 44, 30, 5, 0.06),
+	}
+	a.enemy[.Rino] = {
+		idle = anim_load(E + "rino/idle.png", 52, 34, 11, 0.08, true),
+		run  = anim_load(E + "rino/run.png", 52, 34, 6, 0.05, true),
+		hit  = anim_load(E + "rino/hit.png", 52, 34, 5, 0.07),
+	}
+	bat := anim_load(E + "bat/fly.png", 46, 30, 7, 0.07, true, 27)
+	a.enemy[.Bat] = {
+		idle = bat,
+		run  = bat,
+		hit  = anim_load(E + "bat/hit.png", 46, 30, 5, 0.06, false, 27),
+	}
+	bee := anim_load(E + "bee/idle.png", 36, 34, 6, 0.07, true, 33)
+	a.enemy[.Bee] = {
+		idle = bee,
+		run  = bee,
+		hit  = anim_load(E + "bee/hit.png", 36, 34, 5, 0.06, false, 33),
+	}
 
 	a.tileset = rl.LoadTexture("assets/sprites/tileset.png")
 
@@ -141,7 +239,21 @@ assets_unload :: proc(a: ^Assets) {
 	}
 	unload_anims(player[:])
 
-	rl.UnloadTexture(a.flag.texture)
+	traps := [?]^Anim {
+		&a.traps.saw, &a.traps.trampoline, &a.traps.trampoline_jump, &a.traps.falling_platform,
+		&a.traps.fan, &a.traps.fire_off, &a.traps.fire_hit, &a.traps.fire_on, &a.traps.platform,
+		&a.traps.refill, &a.traps.refill_pop, &a.traps.spike_head, &a.traps.spike_head_blink,
+		&a.traps.spike_head_hit,
+		&a.marks.pole, &a.marks.flag_out, &a.marks.flag, &a.marks.end, &a.marks.end_pressed,
+	}
+	unload_anims(traps[:])
+	rl.UnloadTexture(a.traps.chain)
+	rl.UnloadTexture(a.traps.spikes)
+	for kind in Enemy_Kind {
+		c := &a.enemy[kind]
+		creature := [?]^Anim{&c.idle, &c.run, &c.hit}
+		unload_anims(creature[:])
+	}
 
 	rl.UnloadTexture(a.tileset)
 	for i in 0 ..< BG_LAYERS {
