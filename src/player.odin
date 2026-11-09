@@ -693,6 +693,43 @@ player_respawn :: proc(g: ^Game) {
 	play(&g.assets, .Respawn)
 }
 
+// Lumi's own glow, drawn over the lit world so it shows even in daylight: a
+// soft halo that breathes, and three motes of light circling her. Gold while
+// her dash is ready, a pale blue while it is spent, so the light is also the
+// dash meter.
+player_draw_glow :: proc(g: ^Game) {
+	p := g.player
+	if p.dead || p.respawn_time > RESPAWN_TIME * 0.4 {
+		return
+	}
+	c := player_centre(p)
+	ready := p.dashes > 0
+	col := ready ? rl.Color{255, 214, 140, 255} : rl.Color{150, 190, 255, 255}
+	breathe := 1 + 0.08 * math.sin(g.time * 2.4)
+	rl.BeginBlendMode(.ADDITIVE)
+	halo := col
+	halo.a = ready ? 70 : 46
+	rl.DrawCircleGradient(c, 30 * breathe, halo, {0, 0, 0, 0})
+	halo.a = ready ? 60 : 36
+	rl.DrawCircleGradient(c, 15 * breathe, halo, {0, 0, 0, 0})
+	for i in 0 ..< 3 {
+		angle := g.time * 1.6 + f32(i) * math.TAU / 3
+		r := 13 + 2 * math.sin(g.time * 3 + f32(i))
+		pos := c + {math.cos(angle) * r, math.sin(angle) * r * 0.6}
+		mote := col
+		mote.a = u8(170 + 80 * math.sin(g.time * 5 + f32(i) * 2))
+		rl.DrawCircleV(pos, 1.3, mote)
+		mote.a /= 3
+		rl.DrawCircleV(pos, 3, mote)
+	}
+	if p.flash > 0 {
+		// The dash coming back: a ring of light swells out of her.
+		k := 1 - p.flash / 0.12
+		rl.DrawRing(c, 8 + k * 18, 10 + k * 18, 0, 360, 32, {255, 230, 170, u8(150 * (1 - k))})
+	}
+	rl.EndBlendMode()
+}
+
 // While the dash is spent the body is tinted cooler, which is the only way to
 // tell at a glance whether you still have it.
 SPENT_TINT :: rl.Color{150, 170, 255, 255}

@@ -241,6 +241,7 @@ game_draw :: proc(g: ^Game) {
 
 	rl.BeginMode2D(cam)
 	atmosphere_draw(g, view)
+	player_draw_glow(g)
 	motes_draw(g)
 	sparks_draw(g)
 	chips_draw(g)

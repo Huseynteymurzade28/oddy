@@ -98,11 +98,13 @@ gather_lights :: proc(g: ^Game) {
 	}
 	flicker := 1 + math.sin(g.time * 11) * 0.03 + math.sin(g.time * 23) * 0.02
 
-	// You carry a lantern's worth of light, so the dark is never total.
+	// Lumi is a light: the dark is never total around her. Warm while her
+	// dash is ready, a cooler blue while it is spent.
 	if !g.player.dead || g.player.death_timer > 0 {
 		c := player_centre(g.player)
-		light(c, 110 * flicker, {150, 140, 120, 255})
-		light(c, 50, {120, 110, 96, 255})
+		warm := g.player.dashes > 0
+		light(c, 120 * flicker, warm ? rl.Color{170, 150, 110, 255} : rl.Color{110, 130, 170, 255})
+		light(c, 56, warm ? rl.Color{140, 120, 90, 255} : rl.Color{90, 110, 150, 255})
 	}
 
 	for d in g.decor {
