@@ -1,12 +1,14 @@
 package game
 
+import "core:fmt"
 import "core:math"
+import "core:strings"
 import rl "../libs/raylib"
 
 PLAYER_W :: 10
 PLAYER_H :: 22
 
-RUN_SPEED :: 128.0
+RUN_SPEED :: 138.0
 GROUND_ACCEL :: 1500.0
 AIR_ACCEL :: 1000.0
 GROUND_FRICTION :: 1800.0
@@ -53,7 +55,7 @@ SUPER_X :: 260.0
 HYPER_X :: 320.0
 HYPER_Y_SCALE :: 0.55
 
-DEATH_TIME :: 0.6 // from the hit to being back at the checkpoint
+DEATH_TIME :: 0.5 // from the hit to being back at the checkpoint
 RESPAWN_TIME :: 0.32 // the puff you arrive in; the body shows once it clears
 FALL_DEATH_MARGIN :: 32.0 // how far under the level counts as fallen out of it
 
@@ -99,6 +101,7 @@ Player :: struct {
 	dust_timer:   f32,
 
 	riding:       int, // the platform in `g.things` stood on, or -1
+	combo:        int, // bounces off creatures and trampolines since last on the ground
 
 	dead:         bool,
 	death_timer:  f32,
@@ -354,6 +357,14 @@ player_update :: proc(g: ^Game, dt: f32) {
 			p.vel.y = min(p.vel.y, 0)
 		}
 	}
+	if wall_hit && dashing {
+		// A dash goes through crates: break what is ahead and keep going.
+		probe := before
+		probe.x += math.sign(p.vel.x) * 2
+		if crates_break_in(g, probe, p.vel) {
+			wall_hit = false
+		}
+	}
 	if wall_hit {
 		p.vel.x = 0
 	}
@@ -372,14 +383,29 @@ player_update :: proc(g: ^Game, dt: f32) {
 		}
 	}
 	if bumped_head {
-		// Corner nudge: a head that only clipped the edge of a tile slides
-		// sideways past it and the jump carries on.
-		if nudged, ok := corner_nudge(m, pre, p.vel.y * dt, in_.down); ok {
+		// A head into a crate breaks it, like a brick in an old platformer.
+		above := pre
+		above.y -= 2
+		above.height = 2
+		if crates_break_in(g, above, {0, -120}) {
+			bumped_head = true // still a bonk: you stop rising
+		} else if nudged, ok := corner_nudge(m, pre, p.vel.y * dt, in_.down); ok {
+			// Corner nudge: a head that only clipped the edge of a tile slides
+			// sideways past it and the jump carries on.
 			r = nudged
 			bumped_head = false
 		}
 	}
+	if grounded && dashing && p.dash_dir.y > 0 {
+		// A dash down smashes the crates underfoot and carries on through.
+		below := r
+		below.y += 2
+		if crates_break_in(g, below, {0, 120}) {
+			grounded = false
+		}
+	}
 	if grounded {
+		p.combo = 0
 		if was_airborne && falling_speed > 120 {
 			// The harder the fall, the flatter the landing.
 			k := clamp((falling_speed - 120) / (MAX_FALL - 120), 0, 1)
@@ -499,7 +525,15 @@ player_bounce :: proc(g: ^Game, speed: f32) {
 	animator_restart(&p.anim, &g.assets.player.double_jump)
 	p.stretch = {0.7, 1.35}
 	spawn_burst(g, p.pos, {230, 240, 255, 255}, 6, 70, 1.0)
-	play(&g.assets, .Bounce)
+	// Bounces strung together without touching the ground make a combo:
+	// called out, and each one a note higher.
+	p.combo += 1
+	play_pitched(&g.assets, .Bounce, math.pow(f32(1.0595), f32(min(p.combo - 1, 12)) * 2))
+	if p.combo >= 2 {
+		colours := [4]rl.Color{{255, 230, 120, 255}, {255, 170, 90, 255}, {255, 120, 150, 255}, {200, 150, 255, 255}}
+		spawn_popup(g, p.pos - {0, 30}, colours[min(p.combo - 2, 3)], strings.clone_to_cstring(fmt.tprintf("x%v", p.combo)))
+		spawn_burst(g, p.pos - {0, 10}, {255, 240, 160, 255}, 4 + p.combo * 2, 90, 1.1)
+	}
 }
 
 // Gives the dash back, with a flash so you can see it happen.

@@ -26,9 +26,10 @@ renamed for what they do in the game (`jump.wav` was `sfx_movement_jump1.wav`).
 
 ## Drawn for Oddy
 
-`sprites/terrain/` (the ground, grass, flowers, bridges, water and lava of
-each world) and `sprites/background/` (the skies, clouds, mountains, ruins,
-volcanoes, hills and trees) are this project's own, drawn pixel by pixel by
+`sprites/terrain/` (the ground, grass, flowers, bridges, water, lava and
+crates of each world), `sprites/background/` (the skies, clouds, mountains,
+ruins, volcanoes, hills and trees) and `sprites/fx/` (the gem, butterflies and
+birds) are this project's own, drawn pixel by pixel by
 `tools/art/make_art.py` from the palettes in `tools/art/palette.py`.
 
 ## Not under `assets/`

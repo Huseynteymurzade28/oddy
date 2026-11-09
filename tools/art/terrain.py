@@ -8,7 +8,8 @@ as `src/tilemap.odin` reads it:
              bottom-right), cols 4-7 the fringe of grass that stands above an
              exposed top, cols 8-15 flowers and tufts that grow on tops
   row 7      platform: left end, two middles, right end, a lone one
-  row 8      liquid: cols 0-3 the surface, cols 4-7 the body, four frames
+  row 8      liquid: cols 0-3 the surface, cols 4-7 the body, four frames;
+             col 8 a breakable crate, cols 9-12 the chips it breaks into
 """
 
 VARIANTS = 6
@@ -417,6 +418,44 @@ def liquid(z, surface, frame):
     return img
 
 
+def crate(z):
+    """A breakable crate in the world's own wood: a frame, two boards and a
+    brace across, bright enough to say 'hit me'."""
+    p = z['plank']
+    o = z['outline']
+    img = blank()
+    for y in range(T):
+        for x in range(T):
+            edge = x in (0, T - 1) or y in (0, T - 1)
+            frame = x in (1, 2, T - 3, T - 2) or y in (1, 2, T - 3, T - 2)
+            if edge:
+                c = o
+            elif frame:
+                c = p[1] if (x in (1, 2) or y in (1, 2)) else p[2]
+                if x in (1,) or y in (1,):
+                    c = p[0]
+            else:
+                c = p[1] if (y // 4) % 2 == 0 else p[2]
+            img[y, x] = c
+    for i in range(3, T - 3):  # the brace, corner to corner
+        img[i, i] = p[3]
+        img[i, i - 1 if i > 3 else i] = p[0]
+    for x, y in [(3, 3), (T - 4, 3), (3, T - 4), (T - 4, T - 4)]:  # nails
+        img[y, x] = z['stone'][0]
+    return img
+
+
+def chip(z, k):
+    """A splinter of crate flying off: drawn small in the middle of a tile."""
+    p = z['plank']
+    img = blank()
+    shapes = [[(6, 7), (7, 7), (8, 7), (7, 8)], [(7, 6), (7, 7), (8, 8), (9, 8)],
+              [(6, 8), (7, 8), (7, 7), (8, 7), (9, 7)], [(7, 7), (8, 7), (7, 8), (8, 8)]]
+    for i, (x, y) in enumerate(shapes[k]):
+        img[y, x] = p[i % 3]
+    return img
+
+
 def sheet(name):
     z = ZONES[name]
     out = np.zeros((T * (VARIANTS + 3), T * 16, 4), dtype=np.uint8)
@@ -438,4 +477,7 @@ def sheet(name):
     for f in range(4):
         place(f, VARIANTS + 2, liquid(z, True, f))
         place(4 + f, VARIANTS + 2, liquid(z, False, f))
+    place(8, VARIANTS + 2, crate(z))
+    for k in range(4):
+        place(9 + k, VARIANTS + 2, chip(z, k))
     return Image.fromarray(out, 'RGBA')

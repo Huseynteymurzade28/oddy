@@ -112,6 +112,7 @@ next_level :: proc(g: ^Game, index: int) -> (int, bool) {
 
 Totals :: struct {
 	fruit:          int,
+	gems:           int,
 	medals:         int,
 	secrets_beaten: int,
 }
@@ -121,6 +122,7 @@ progress_totals :: proc(g: ^Game) -> Totals {
 	for d, i in g.levels {
 		l := save_level(&g.save, d.ident)
 		t.fruit += fruit_count(l.fruit)
+		t.gems += l.best_gems
 		t.medals += card(level_medals(g, i))
 		if d.secret && l.cleared {
 			t.secrets_beaten += 1

@@ -39,6 +39,17 @@ On the world map, tap a level to pick it and tap it again (or PLAY) to go;
 the arrows by the title turn to the next world, HERO picks who you play as.
 On a keyboard: left and right, `Q` `E` for worlds, `Enter`, `H`, `Esc`.
 
+## Things to find and break
+
+- **Gems.** Strung along good paths and spilling out of crates. Pick a run of
+  them up quickly and each one rings a note higher. They stay picked up when
+  you die; the clear card counts them, and the map keeps your best.
+- **Crates.** Dash into one, dash down onto one, or jump into it from below
+  and it bursts into three gems.
+- **Combos.** Land on creature after creature, or a creature and a
+  trampoline, without touching the ground: each bounce is called out (x2,
+  x3...) and pitched higher.
+
 ## The map, fruit and medals
 
 - **Worlds and levels.** A level opens when the one before it is cleared; a
@@ -88,7 +99,8 @@ boss you beat without a gun.
    spiked head that drops on you; pigs, slimes, rinos, bats and bees to land
    on. Levels 1-1 to 1-3.
 4. **Feel** — done: squash and stretch, dust, puffs to vanish and arrive in,
-   an iris on every death and respawn, CC0 sound effects, vibration.
+   an iris on every death and respawn, CC0 sound effects, vibration, gems,
+   crates, combos, confetti, butterflies and birds, flowers in the breeze.
 5. **The map** — done: the world map, saving, fruit, medals, secret exits
    (1-1 hides one, into the secret level 1-S), four heroes.
 6. The fifteen levels and the three bosses.
@@ -136,7 +148,7 @@ and press `F5` in the running game: it reads the file again and restarts the
 level you are on.
 
 - **Collision** (IntGrid, 16px): `1` rock, `2` one-way platform, `3` spikes
-  (they point away from the rock beside them), `4` water. Only the shape is
+  (they point away from the rock beside them), `4` water, `5` crate. Only the shape is
   drawn; the game picks the grass, edges and corners itself from which
   neighbours are rock.
 - **Entities**: `Player_Start` (one per level), `Checkpoint`, `Exit` (the
@@ -164,7 +176,8 @@ level you are on.
   started each time you die.
   Two more for the map: `Fruit`, a collectible (its look is picked by the
   game), and `Secret_Exit`, a second way out whose `Unlocks` field names the
-  secret level it opens.
+  secret level it opens. And the gems: `Gem` for one, `Gem_Line` for a row or
+  column of them, one a tile along the rectangle's long side.
 - **Level identifiers** place a level on the map: `W2_4` is world 2, level 4
   (1 to 5, the fifth is the boss); `W1_S1` is a secret level of world 1, shown
   above the level whose secret exit names it.

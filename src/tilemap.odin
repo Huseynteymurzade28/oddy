@@ -14,6 +14,7 @@ Tile :: enum u8 {
 	Platform, // one-way: solid from above only
 	Water, // hazard, does not block movement
 	Spike, // hazard on the side it points to; see `spike_hitbox`
+	Crate, // solid until a dash or a head breaks it; see `crate_break`
 }
 
 Tilemap :: struct {
@@ -51,6 +52,12 @@ tile_set :: proc(m: ^Tilemap, x, y: int, t: Tile) {
 }
 
 is_blocking :: proc(t: Tile) -> bool {
+	return t == .Rock || t == .Deep || t == .Moss || t == .Crate
+}
+
+// Ground for the look of things: what the autotiler joins up. A crate is
+// solid but sits apart, so the earth around it keeps its edges.
+is_ground :: proc(t: Tile) -> bool {
 	return t == .Rock || t == .Deep || t == .Moss
 }
 
@@ -126,7 +133,7 @@ tilemap_touches_hazard :: proc(m: ^Tilemap, r: rl.Rectangle) -> bool {
 				if rl.CheckCollisionRecs(r, spike_hitbox(m, tx, ty)) {
 					return true
 				}
-			case .Empty, .Rock, .Deep, .Moss, .Platform:
+			case .Empty, .Rock, .Deep, .Moss, .Platform, .Crate:
 			}
 		}
 	}
@@ -171,7 +178,7 @@ cell_hash :: proc(x, y, salt: int) -> int {
 
 @(private = "file")
 solid_at :: proc(m: ^Tilemap, x, y: int) -> bool {
-	return is_blocking(tile_at(m, x, y))
+	return is_ground(tile_at(m, x, y))
 }
 
 tilemap_draw :: proc(g: ^Game, view: rl.Rectangle) {
@@ -226,6 +233,8 @@ tilemap_draw :: proc(g: ^Game, view: rl.Rectangle) {
 				draw(tex, col, ROW_LIQUID, x, y, {255, 255, 255, 235})
 			case .Spike:
 				draw_spike(g, x, y)
+			case .Crate:
+				draw(tex, 8, ROW_LIQUID, x, y)
 			case .Empty:
 			}
 		}
@@ -240,7 +249,10 @@ tilemap_draw :: proc(g: ^Game, view: rl.Rectangle) {
 			}
 			draw(tex, 4 + cell_hash(x, y, 5) % 4, ROW_EXTRAS, x, y - 1)
 			if h := cell_hash(x, y, 9) % 100; h < 26 {
-				draw(tex, 8 + h % 8, ROW_EXTRAS, x, y - 1)
+				// Flowers nod in a breeze that rolls along the ground.
+				sway := math.round(math.sin(g.time * 2.2 + f32(x) * 0.7) * 1.2)
+				dest := rl.Rectangle{f32(x) * TILE + sway, f32(y - 1) * TILE, TILE, TILE}
+				rl.DrawTexturePro(tex, terrain_source(8 + h % 8, ROW_EXTRAS), dest, {}, 0, rl.WHITE)
 			}
 		}
 	}

@@ -158,6 +158,12 @@ draw_stats :: proc(g: ^Game) {
 	draw_skull(6, 17, {40, 26, 34, 230})
 	draw_skull(6, 16, {255, 250, 240, 255})
 	draw_text_outlined(a, fmt.ctprintf("%v", g.deaths), {16, 15}, 8, rl.RAYWHITE)
+	// The gems, with the icon glinting along.
+	s := hud_scale()
+	anim := &a.gem
+	frame := int(g.time / anim.frame_time) % anim.count
+	anim_draw_frame(anim, frame, {12 * s, 32 * s}, false, rl.WHITE, s)
+	draw_text_outlined(a, fmt.ctprintf("%v", g.level.gems_got), {19, 27}, 8, {190, 245, 255, 255})
 }
 
 @(private = "file")

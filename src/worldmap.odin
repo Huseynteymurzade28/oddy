@@ -518,9 +518,10 @@ draw_info_panel :: proc(g: ^Game) {
 		line = "NOT CLEARED YET"
 	}
 	draw_text(a, line, {x, panel.y + 22}, 8, {230, 214, 190, 255})
-	extra := fmt.ctprintf("FRUIT %v/%v", fruit_count(l.fruit), len(d.fruit))
+	gems_of := len(d.gems) + d.crates * GEMS_PER_CRATE
+	extra := fmt.ctprintf("FRUIT %v/%v   GEMS %v/%v", fruit_count(l.fruit), len(d.fruit), l.best_gems, gems_of)
 	if d.par > 0 {
-		extra = fmt.ctprintf("FRUIT %v/%v   PAR %s", fruit_count(l.fruit), len(d.fruit), format_time(d.par))
+		extra = fmt.ctprintf("FRUIT %v/%v   GEMS %v/%v   PAR %s", fruit_count(l.fruit), len(d.fruit), l.best_gems, gems_of, format_time(d.par))
 	}
 	draw_text(a, extra, {x, panel.y + 34}, 8, {230, 214, 190, 255})
 
@@ -544,6 +545,9 @@ draw_totals :: proc(g: ^Game) {
 	draw_text_shadow(a, fmt.ctprintf("%v", t.fruit), {view.x - 50, y}, 8, rl.RAYWHITE)
 	fill_circle({view.x - 30, y + 4}, 3, MEDAL_COLOURS[.Time])
 	draw_text_shadow(a, fmt.ctprintf("%v", t.medals), {view.x - 24, y}, 8, rl.RAYWHITE)
+	gem := &a.gem
+	anim_draw_frame(gem, int(g.time / gem.frame_time) % gem.count, {(view.x - 82) * s, (y + 4) * s}, false, rl.WHITE, s)
+	draw_text_shadow(a, fmt.ctprintf("%v", t.gems), {view.x - 75, y}, 8, rl.RAYWHITE)
 }
 
 @(private = "file")

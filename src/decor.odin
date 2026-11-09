@@ -40,6 +40,8 @@ Mote_Kind :: enum u8 {
 	Dust,
 	Drip,
 	Ember,
+	Butterfly, // drawn from the critters sheet, not as a glowing dot
+	Bubble,
 }
 
 Mote :: struct {
@@ -208,24 +210,55 @@ motes_update :: proc(g: ^Game, dt: f32) {
 		}
 	}
 
-	// What drifts depends on how deep you are.
+	// What drifts depends on the world.
 	switch zone {
 	case .Mossy:
-		if rand.float32() < dt * 4 {
-			life := rand.float32_range(3, 6)
+		// Pollen on the air, and a few butterflies about.
+		if rand.float32() < dt * 3 {
+			life := rand.float32_range(4, 7)
 			spawn_mote(g, {
-				kind = .Firefly,
+				kind = .Dust,
 				pos = random_in_view(view),
-				vel = {rand.float32_range(-8, 8), rand.float32_range(-6, 6)},
+				vel = {rand.float32_range(4, 12), rand.float32_range(-3, 3)},
 				life = life,
 				max_life = life,
-				size = 1,
-				tint = look.mote,
-				glow = true,
+				size = 0.7,
+				tint = {255, 250, 210, 170},
+				phase = rand.float32_range(0, math.TAU),
+			})
+		}
+		butterflies := 0
+		for m in g.motes {
+			if m.kind == .Butterfly {
+				butterflies += 1
+			}
+		}
+		if butterflies < 5 && rand.float32() < dt * 0.8 {
+			life := rand.float32_range(8, 14)
+			spawn_mote(g, {
+				kind = .Butterfly,
+				pos = random_in_view(view),
+				vel = {rand.float32_range(-14, 14), rand.float32_range(-6, 6)},
+				life = life,
+				max_life = life,
+				size = f32(rand.int_max(3)), // which colour
+				tint = {255, 255, 255, 255},
 				phase = rand.float32_range(0, math.TAU),
 			})
 		}
 	case .Drowned:
+		if rand.float32() < dt * 2.5 {
+			life := rand.float32_range(3, 6)
+			spawn_mote(g, {
+				kind = .Bubble,
+				pos = {view.x + rand.float32_range(0, view.width), view.y + view.height + 4},
+				vel = {0, rand.float32_range(-30, -14)},
+				life = life,
+				max_life = life,
+				size = rand.float32_range(1, 2.6),
+				phase = rand.float32_range(0, math.TAU),
+			})
+		}
 		if rand.float32() < dt * 5 {
 			life := rand.float32_range(4, 7)
 			spawn_mote(g, {
@@ -321,6 +354,13 @@ motes_update :: proc(g: ^Game, dt: f32) {
 			}
 		case .Ember:
 			m.vel.x += math.sin(m.phase * 3) * 12 * dt
+		case .Butterfly:
+			// Fluttering: wandering sideways, bobbing in little hops.
+			m.vel.x += math.cos(m.phase * 0.7) * 18 * dt
+			m.vel.y = math.sin(m.phase * 5) * 14 + math.sin(m.phase * 0.9) * 6
+			m.vel.x = clamp(m.vel.x, -20, 20)
+		case .Bubble:
+			m.vel.x = math.sin(m.phase * 4) * 6
 		}
 		m.pos += m.vel * dt
 		if m.life <= 0 || !rl.CheckCollisionPointRec(m.pos, {view.x - 40, view.y - 40, view.width + 80, view.height + 80}) {
@@ -333,8 +373,26 @@ motes_update :: proc(g: ^Game, dt: f32) {
 }
 
 motes_draw :: proc(g: ^Game) {
+	// Butterflies and bubbles are drawn as they are, before the glowing kinds.
+	for m in g.motes {
+		fade := clamp(m.life / m.max_life * 4, 0, 1) * clamp(m.life * 2, 0, 1)
+		switch m.kind {
+		case .Butterfly:
+			frame := int(m.phase * 8) % 2
+			col := int(m.size) % 3
+			src := rl.Rectangle{f32(col * 2 + frame) * 8, 0, m.vel.x < 0 ? -8 : 8, 8}
+			rl.DrawTexturePro(g.assets.critters, src, {math.round(m.pos.x), math.round(m.pos.y), 8, 8}, {4, 4}, 0, {255, 255, 255, u8(255 * fade)})
+		case .Bubble:
+			rl.DrawCircleLinesV(m.pos, m.size, {230, 250, 255, u8(200 * fade)})
+			rl.DrawPixelV(m.pos - {m.size * 0.4, m.size * 0.4}, {255, 255, 255, u8(230 * fade)})
+		case .Firefly, .Dust, .Drip, .Ember:
+		}
+	}
 	rl.BeginBlendMode(.ADDITIVE)
 	for m in g.motes {
+		if m.kind == .Butterfly || m.kind == .Bubble {
+			continue
+		}
 		fade := clamp(m.life / m.max_life * 3, 0, 1) * clamp(m.life * 2, 0, 1)
 		c := m.tint
 		c.a = u8(f32(c.a) * fade)

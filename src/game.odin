@@ -35,6 +35,9 @@ Game :: struct {
 	player:       Player,
 	sparks:       [dynamic]Spark,
 	poofs:        [dynamic]Poof,
+	popups:       [dynamic]Popup,
+	confetti:     [dynamic]Confetti,
+	chips:        [dynamic]Chip,
 	things:       [dynamic]Thing, // traps and moving pieces
 	enemies:      [dynamic]Enemy,
 	arrows:       [dynamic]Arrow,
@@ -47,6 +50,7 @@ Game :: struct {
 	shake:        f32,
 	freeze:       f32, // a few hundredths of a second where nothing moves
 	camera:       rl.Camera2D,
+	camera_lead:  f32, // how far the camera runs ahead, eased toward the speed
 	exit_anim:    Animator, // the trophy at the end, once pressed
 
 	// this attempt at the level
@@ -77,6 +81,12 @@ game_destroy :: proc(g: ^Game) {
 	save_destroy(&g.save)
 	delete(g.sparks)
 	delete(g.poofs)
+	for p in g.popups {
+		delete(p.text)
+	}
+	delete(g.popups)
+	delete(g.confetti)
+	delete(g.chips)
 	delete(g.things)
 	delete(g.enemies)
 	delete(g.arrows)
@@ -117,6 +127,9 @@ game_update :: proc(g: ^Game, dt: f32) {
 		if g.state != .Paused {
 			motes_update(g, dt) // the menus sit over a live, drifting level
 			sparks_update(g, dt)
+			confetti_update(g, dt)
+			popups_update(g, dt)
+			chips_update(g, dt)
 		}
 	case .Playing:
 		game_update_play(g, dt)
@@ -146,6 +159,9 @@ game_update_play :: proc(g: ^Game, dt: f32) {
 	level_update(g, dt)
 	sparks_update(g, dt)
 	poofs_update(g, dt)
+	popups_update(g, dt)
+	confetti_update(g, dt)
+	chips_update(g, dt)
 }
 
 game_set_state :: proc(g: ^Game, state: Game_State) {
@@ -188,6 +204,7 @@ game_draw :: proc(g: ^Game) {
 	things_draw(g)
 	enemies_draw(g)
 	level_draw_fruit(g)
+	level_draw_gems(g)
 	player_draw(g.player, &g.assets)
 	poofs_draw(g)
 	rl.EndMode2D()
@@ -200,7 +217,12 @@ game_draw :: proc(g: ^Game) {
 	atmosphere_draw(g, view)
 	motes_draw(g)
 	sparks_draw(g)
+	chips_draw(g)
+	if g.state != .Cleared {
+		confetti_draw(g)
+	}
 	level_draw_hints(g)
+	popups_draw(g)
 	draw_vignette(g, view)
 	rl.EndMode2D()
 

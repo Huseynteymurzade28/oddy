@@ -23,6 +23,7 @@ Level_Save :: struct {
 	best_time:   f32,
 	best_deaths: int,
 	fruit:       u64, // bit i: fruit i of the level has been kept
+	best_gems:   int,
 }
 
 Save :: struct {
@@ -93,7 +94,7 @@ save_level :: proc(s: ^Save, ident: string) -> Level_Save {
 
 // Records a clear: the best time and the fewest deaths are kept apart, since
 // they are separate medals and need not come from the same run.
-save_record_clear :: proc(s: ^Save, ident: string, time: f32, deaths: int, fruit: u64) {
+save_record_clear :: proc(s: ^Save, ident: string, time: f32, deaths: int, fruit: u64, gems := 0) {
 	l, had := s.levels[ident]
 	if !l.cleared {
 		l = {cleared = true, best_time = time, best_deaths = deaths}
@@ -102,6 +103,7 @@ save_record_clear :: proc(s: ^Save, ident: string, time: f32, deaths: int, fruit
 		l.best_deaths = min(l.best_deaths, deaths)
 	}
 	l.fruit |= fruit
+	l.best_gems = max(l.best_gems, gems)
 	if !had {
 		s.levels[strings.clone(ident)] = l
 	} else {

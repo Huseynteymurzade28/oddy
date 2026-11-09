@@ -25,6 +25,8 @@ Sfx :: enum {
 	Arrow,
 	Menu_Move,
 	Menu_Select,
+	Gem,
+	Crate,
 }
 
 @(private = "file")
@@ -46,12 +48,14 @@ SFX_FILES := [Sfx]struct {
 	.Arrow       = {"arrow", 0.35},
 	.Menu_Move   = {"menu_move", 0.4},
 	.Menu_Select = {"menu_select", 0.45},
+	.Gem         = {"gem", 0.4},
+	.Crate       = {"crate", 0.6},
 }
 
 // Sounds that repeat a lot are played a hair off pitch each time, so a run of
 // jumps does not sound like a machine.
 @(private = "file")
-SFX_VARY :: bit_set[Sfx]{.Jump, .Land, .Dash, .Stomp, .Arrow}
+SFX_VARY :: bit_set[Sfx]{.Jump, .Land, .Dash, .Stomp, .Arrow, .Crate}
 
 Player_Anims :: struct {
 	idle:        Anim,
@@ -131,6 +135,8 @@ Assets :: struct {
 	skins:   [Skin]Player_Anims,
 	fruit:   [FRUIT_KINDS]Anim,
 	fruit_got: Anim, // the sparkle a fruit leaves when it is kept
+	gem:     Anim,
+	critters: rl.Texture2D, // butterflies and a bird, drawn by tools/art
 	traps:   Trap_Anims,
 	enemy:   [Enemy_Kind]Creature_Anims,
 	marks:   Checkpoint_Anims,
@@ -204,6 +210,8 @@ assets_load :: proc(a: ^Assets) {
 		a.fruit[i] = anim_load(rl.TextFormat(F + "%s.png", name), 32, 32, 17, 0.05, true, 16)
 	}
 	a.fruit_got = anim_load(F + "collected.png", 32, 32, 6, 0.05, false, 16)
+	a.gem = anim_load("assets/sprites/fx/gem.png", 12, 12, 6, 0.08, true, 6)
+	a.critters = rl.LoadTexture("assets/sprites/fx/critters.png")
 
 	T :: "assets/sprites/traps/"
 	a.traps = {
@@ -336,6 +344,8 @@ assets_unload :: proc(a: ^Assets) {
 		rl.UnloadTexture(f.texture)
 	}
 	rl.UnloadTexture(a.fruit_got.texture)
+	rl.UnloadTexture(a.gem.texture)
+	rl.UnloadTexture(a.critters)
 
 	traps := [?]^Anim {
 		&a.traps.saw, &a.traps.trampoline, &a.traps.trampoline_jump, &a.traps.falling_platform,
@@ -376,6 +386,12 @@ assets_unload :: proc(a: ^Assets) {
 // `a.player`, so changing it in place is all a change of hero takes.
 assets_use_skin :: proc(a: ^Assets, skin: Skin) {
 	a.player = a.skins[skin]
+}
+
+// The same sound at a chosen pitch: a run of gems climbs the scale.
+play_pitched :: proc(a: ^Assets, s: Sfx, pitch: f32) {
+	rl.SetSoundPitch(a.sfx[s], pitch)
+	rl.PlaySound(a.sfx[s])
 }
 
 play :: proc(a: ^Assets, s: Sfx) {

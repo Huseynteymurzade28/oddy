@@ -31,13 +31,13 @@ camera_view :: proc(g: ^Game) -> rl.Rectangle {
 	return {g.camera.target.x - view.x / 2, g.camera.target.y - view.y / 2, view.x, view.y}
 }
 
-// Where the camera wants to be: a little ahead of the player, never showing
-// anything past the edges of the level.
+// Where the camera wants to be: ahead of the player by how fast they are
+// going, so a run or a dash shows more of what is coming.
 @(private = "file")
 camera_goal :: proc(g: ^Game) -> rl.Vector2 {
 	p := g.player
-	ahead: f32 = p.flip ? -LOOK_AHEAD : LOOK_AHEAD
-	return p.pos - {0, CAMERA_LOOKUP} + {ahead, 0}
+	g.camera_lead += (clamp(p.vel.x * 0.28, -LOOK_AHEAD * 2, LOOK_AHEAD * 2) - g.camera_lead) * min(1, rl.GetFrameTime() * 3)
+	return p.pos - {0, CAMERA_LOOKUP} + {g.camera_lead, 0}
 }
 
 @(private = "file")
@@ -135,5 +135,26 @@ draw_backdrop :: proc(g: ^Game, zone: Zone, look: rl.Vector2, level_h: f32) {
 			dest := rl.Rectangle{math.round((ox - BG_W + f32(c) * BG_W) * s), math.round(oy * s), BG_W * s, BG_H * s}
 			rl.DrawTexturePro(tex, src, dest, {}, 0, rl.WHITE)
 		}
+		if i == 1 && zone == .Mossy {
+			draw_birds(g, view, s)
+		}
+	}
+}
+
+// Now and then a little flock crosses the sky, behind the mountains.
+@(private = "file")
+draw_birds :: proc(g: ^Game, view: rl.Vector2, s: f32) {
+	period: f32 = 26
+	t := math.mod(g.time, period)
+	span := view.x + 120
+	for k in 0 ..< 5 {
+		x := -60 + t / period * span * 1.6 - f32(k) * 11 - f32(k % 2) * 4
+		y := 46 + f32(k) * 5 + math.sin(g.time * 1.3 + f32(k)) * 2 - f32(k % 2) * 6
+		if x < -10 || x > view.x + 10 {
+			continue
+		}
+		frame := int(g.time * 6 + f32(k)) % 2
+		src := rl.Rectangle{f32(frame) * 8, 8, 8, 8}
+		rl.DrawTexturePro(g.assets.critters, src, {math.round(x) * s, math.round(y) * s, 8 * s, 8 * s}, {}, 0, rl.WHITE)
 	}
 }

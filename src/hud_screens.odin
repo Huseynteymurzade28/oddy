@@ -41,10 +41,44 @@ centred_in :: proc(a: ^Assets, r: rl.Rectangle, text: cstring, y, size: f32, col
 	draw_text(a, text, {r.x + (r.width - text_width(a, text, size)) / 2, y}, size, colour)
 }
 
+// The title stands in the meadow: the sky and hills behind, a strip of
+// grassy ground along the bottom, and your hero trotting on the spot.
+@(private = "file")
+draw_title_scene :: proc(g: ^Game) {
+	a := &g.assets
+	view := view_size()
+	s := hud_scale()
+	draw_backdrop(g, .Mossy, {g.time * 14, 120}, 240)
+	tex := a.terrain[.Mossy]
+	ground_y: f32 = view.y - 26
+	scroll := math.mod(g.time * 30, TILE)
+	for i in -1 ..< int(view.x / TILE) + 2 {
+		x := f32(i) * TILE - scroll
+		hash := (i + int(g.time * 30 / TILE)) * 7919
+		cells := [3]rl.Rectangle {
+			terrain_source(2 | 8, abs(hash) % 6), // the grassy top
+			terrain_source(1 | 2 | 8 | 4, abs(hash / 3) % 6),
+			terrain_source(4 + abs(hash) % 4, 6), // its fringe, above
+		}
+		rl.DrawTexturePro(tex, cells[0], {x * s, ground_y * s, TILE * s, TILE * s}, {}, 0, rl.WHITE)
+		rl.DrawTexturePro(tex, cells[1], {x * s, (ground_y + TILE) * s, TILE * s, TILE * s}, {}, 0, {235, 235, 235, 255})
+		rl.DrawTexturePro(tex, cells[2], {x * s, (ground_y - TILE) * s, TILE * s, TILE * s}, {}, 0, rl.WHITE)
+		if abs(hash) % 100 < 30 {
+			rl.DrawTexturePro(tex, terrain_source(8 + abs(hash / 7) % 8, 6), {x * s, (ground_y - TILE) * s, TILE * s, TILE * s}, {}, 0, rl.WHITE)
+		}
+	}
+	// The hero runs along with the scrolling ground.
+	anim := &a.player.run
+	frame := int(g.time / anim.frame_time) % anim.count
+	bob := math.abs(math.sin(g.time * 9)) * 1.2
+	anim_draw_frame(anim, frame, {view.x * 0.18 * s, (ground_y - bob) * s}, false, rl.WHITE, s)
+	rl.DrawRectangleGradientV(0, 0, rl.GetScreenWidth(), i32(110 * s), {20, 14, 40, 90}, {20, 14, 40, 0})
+}
+
 draw_title_screen :: proc(g: ^Game) {
 	a := &g.assets
 	view := view_size()
-	draw_shade(70, 170)
+	draw_title_scene(g)
 
 	if g.ui.how_to {
 		draw_how_to(g)
@@ -62,7 +96,7 @@ draw_title_screen :: proc(g: ^Game) {
 	draw_panel(g, menu_panel(g))
 	draw_menu(g)
 
-	draw_text_outlined_centered(a, fmt.ctprintf("%v LEVELS", len(g.levels)), view.y - 16, 8, DIM)
+	_ = view
 }
 
 @(private = "file")
@@ -105,7 +139,7 @@ draw_pause_screen :: proc(g: ^Game) {
 
 draw_end_screen :: proc(g: ^Game) {
 	a := &g.assets
-	draw_shade(100, 210)
+	draw_shade(40, 150)
 	panel := menu_panel(g)
 	// The board slides up into place.
 	rise := max(0, 1 - g.state_time * 3)
@@ -126,6 +160,10 @@ draw_end_screen :: proc(g: ^Game) {
 	if g.state_time >= MENU_DELAY || rise == 0 {
 		draw_menu(g)
 	}
+	// The confetti falls in front of the card, not behind it.
+	rl.BeginMode2D(g.camera)
+	confetti_draw(g)
+	rl.EndMode2D()
 }
 
 // The time and the deaths big, the fruit beside them, and then the three
@@ -134,24 +172,26 @@ draw_end_screen :: proc(g: ^Game) {
 draw_clear_summary :: proc(g: ^Game, r: rl.Rectangle) {
 	a := &g.assets
 	c := g.clear
-	col_w := r.width / 3
-	columns := [3]struct {
+	col_w := r.width / 4
+	columns := [4]struct {
 		value: cstring,
 		name:  cstring,
 	} {
 		{fmt.ctprintf("%s", format_time(g.level_time)), "TIME"},
 		{fmt.ctprintf("%v", g.deaths), "DEATHS"},
 		{fmt.ctprintf("%v/%v", c.fruit, c.fruit_of), "FRUIT"},
+		{fmt.ctprintf("%v/%v", c.gems, c.gems_of), "GEMS"},
 	}
 	for col, i in columns {
 		cx := r.x + col_w * (f32(i) + 0.5)
-		draw_text(a, col.value, {cx - text_width(a, col.value, 16) / 2, r.y + 6}, 16, INK)
+		size: f32 = text_width(a, col.value, 16) > col_w - 4 ? 8 : 16
+		draw_text(a, col.value, {cx - text_width(a, col.value, size) / 2, r.y + 6 + (16 - size) / 2}, size, INK)
 		draw_text(a, col.name, {cx - text_width(a, col.name, 8) / 2, r.y + 24}, 8, {140, 104, 70, 255})
 	}
 	fill_rect(r.x + 10, r.y + 37, r.width - 20, 1, {180, 150, 110, 255})
 
 	for medal, i in Medal {
-		cx := r.x + col_w * (f32(i) + 0.5)
+		cx := r.x + r.width / 3 * (f32(i) + 0.5)
 		pos := rl.Vector2{cx, r.y + 52}
 		earned := medal in c.medals
 		fresh := medal in c.new_medals

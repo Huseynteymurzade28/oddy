@@ -13,12 +13,13 @@ editor's business.
 What the project has to contain (and does, as LDtk saves it):
 
   Collision  an IntGrid layer, 16px cells:
-               1 rock   2 one-way platform   3 spikes   4 water
+               1 rock   2 one-way platform   3 spikes   4 water   5 crate
   Entities   an Entities layer with
                Player_Start  where you start; one per level
                Checkpoint    a flag you respawn at once touched
                Exit          the flag that finishes the level
                Hint          a line of text in the world (field `Text`)
+               Gem, Gem_Line a gem; a row of gems along the rectangle
              and the traps and creatures in `things.odin` and `enemy.odin`.
              Every entity is read as the rectangle LDtk draws for it, so
              pivots and sizes can be changed in the editor freely.
@@ -47,6 +48,8 @@ Level_Data :: struct {
 	zone:        Zone,
 	par:         f32, // seconds for the time medal; 0 for none
 	fruit:       [dynamic]rl.Vector2,
+	gems:        [dynamic]rl.Vector2,
+	crates:      int, // crate tiles: each one breaks into GEMS_PER_CRATE
 	secret_exit: rl.Vector2, // zero if the level has none
 	unlocks:     string, // the level that secret exit opens
 	width:       int, // cells
@@ -81,6 +84,7 @@ level_data_destroy :: proc(d: ^Level_Data) {
 	delete(d.hints)
 	delete(d.things)
 	delete(d.fruit)
+	delete(d.gems)
 	delete(d.unlocks)
 	d^ = {}
 }
@@ -170,6 +174,9 @@ read_level :: proc(lv: json.Value) -> (d: Level_Data, ok: bool) {
 					d.tiles[i] = .Spike
 				case 4:
 					d.tiles[i] = .Water
+				case 5:
+					d.tiles[i] = .Crate
+					d.crates += 1
 				}
 			}
 			ok = true
@@ -194,6 +201,28 @@ read_level :: proc(lv: json.Value) -> (d: Level_Data, ok: bool) {
 					d.exit = pos
 				case "Fruit":
 					append(&d.fruit, pos)
+				case "Gem":
+					append(&d.gems, pos)
+				case "Gem_Line":
+					// A row (or column) of gems, one a tile, along the long
+					// side of the rectangle drawn in LDtk.
+					w := f32(num(get(e, "width")))
+					h := f32(num(get(e, "height")))
+					pv := arr(get(e, "__pivot"))
+					px, py: f32 = 0, 0
+					if len(pv) >= 2 {
+						px, py = flt(pv[0]), flt(pv[1])
+					}
+					r := rl.Rectangle{pos.x - px * w, pos.y - py * h, w, h}
+					if w >= h {
+						for x := r.x + TILE / 2; x < r.x + w; x += TILE {
+							append(&d.gems, rl.Vector2{x, r.y + h / 2})
+						}
+					} else {
+						for y := r.y + TILE / 2; y < r.y + h; y += TILE {
+							append(&d.gems, rl.Vector2{r.x + w / 2, y})
+						}
+					}
 				case "Secret_Exit":
 					d.secret_exit = pos
 					for f in arr(get(e, "fieldInstances")) {

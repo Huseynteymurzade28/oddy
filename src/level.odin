@@ -9,6 +9,10 @@ import rl "../libs/raylib"
 The level being played: built from one `Level_Data` (see `ldtk.odin`), plus
 what changes while you play it: which checkpoints are lit, and the fruit.
 
+Gems are the little reward everywhere: lines of them trace good paths, crates
+burst into them, and a run of them picked up quickly climbs the scale. Gems
+and broken crates stay taken when you die; only a restart puts them back.
+
 Fruit works the way it does in Celeste. Touch one and it follows you; it is
 only yours once you have stood on solid ground with it for a moment (or
 reached a checkpoint or the end). Die first and it goes back where it was.
@@ -31,7 +35,21 @@ Level :: struct {
 	checkpoints: [dynamic]Checkpoint,
 	fruit:       [dynamic]Fruit,
 	kept:        u64, // fruit kept on this attempt, bit per fruit
+	gems:        [dynamic]Gem,
+	gems_got:    int, // picked up, counting the ones out of crates
+	gems_total:  int,
+	gem_chain:   int, // gems picked up in quick succession
+	gem_timer:   f32, // time left to keep the chain going
 }
+
+Gem :: struct {
+	pos:   rl.Vector2,
+	taken: bool,
+	pop:   f32, // > 0 for the moment it flies up after being taken
+}
+
+GEMS_PER_CRATE :: 3
+GEM_CHAIN_TIME :: 0.6
 
 Fruit_State :: enum u8 {
 	Waiting,
@@ -54,6 +72,8 @@ Clear_Result :: struct {
 	medals:     Medals,
 	fruit:      int, // kept, of
 	fruit_of:   int,
+	gems:       int,
+	gems_of:    int,
 	new_skin:   bool,
 }
 
@@ -66,6 +86,7 @@ EXIT_REACH :: rl.Vector2{16, 34}
 level_destroy :: proc(l: ^Level) {
 	delete(l.checkpoints)
 	delete(l.fruit)
+	delete(l.gems)
 	l^ = {}
 }
 
@@ -174,6 +195,18 @@ level_restart :: proc(g: ^Game) {
 		f.pos = f.home
 	}
 	g.level.kept = 0
+	// A restart puts the crates and gems back; a death does not.
+	d := &g.levels[g.level.index]
+	copy(g.map_tiles.tiles, d.tiles)
+	clear(&g.level.gems)
+	for p in d.gems {
+		append(&g.level.gems, Gem{pos = p})
+	}
+	g.level.gems_got = 0
+	g.level.gems_total = len(d.gems) + d.crates * GEMS_PER_CRATE
+	g.level.gem_chain = 0
+	clear(&g.chips)
+	clear(&g.confetti)
 	g.fruit_safe = 0
 	g.respawn = g.level.spawn
 	g.deaths = 0
@@ -245,10 +278,98 @@ fruit_update :: proc(g: ^Game, dt: f32) {
 	}
 }
 
+@(private = "file")
+take_gem :: proc(g: ^Game, pos: rl.Vector2, count: int) {
+	l := &g.level
+	l.gems_got += count
+	// Quick pickups climb the scale, a semitone at a time, up to an octave.
+	pitch := math.pow(f32(1.0595), f32(min(l.gem_chain, 12)))
+	play_pitched(&g.assets, .Gem, pitch)
+	l.gem_chain += 1
+	l.gem_timer = GEM_CHAIN_TIME
+	spawn_burst(g, pos, {160, 240, 255, 255}, 4, 50, 0.8)
+}
+
+@(private = "file")
+gems_update :: proc(g: ^Game, dt: f32) {
+	l := &g.level
+	l.gem_timer -= dt
+	if l.gem_timer <= 0 {
+		l.gem_chain = 0
+	}
+	if g.player.dead {
+		return
+	}
+	pr := player_rect(g.player)
+	for &gem in l.gems {
+		gem.pop = max(0, gem.pop - dt)
+		if !gem.taken && rl.CheckCollisionCircleRec(gem.pos, 7, pr) {
+			gem.taken = true
+			gem.pop = 0.3
+			take_gem(g, gem.pos, 1)
+		}
+	}
+}
+
+// Breaks the crate at a tile, if there is one: splinters, a thump, and its
+// gems straight into your count. Returns whether it broke anything.
+crate_break :: proc(g: ^Game, tx, ty: int, push: rl.Vector2) -> bool {
+	if tile_at(&g.map_tiles, tx, ty) != .Crate {
+		return false
+	}
+	tile_set(&g.map_tiles, tx, ty, .Empty)
+	centre := rl.Vector2{f32(tx) * TILE + TILE / 2, f32(ty) * TILE + TILE / 2}
+	spawn_chips(g, centre, push)
+	spawn_burst(g, centre, {255, 240, 200, 255}, 8, 90, 1.0)
+	spawn_popup(g, centre - {0, 10}, {160, 240, 255, 255}, strings.clone_to_cstring(fmt.tprintf("+%v", GEMS_PER_CRATE)))
+	play(&g.assets, .Crate)
+	take_gem(g, centre, GEMS_PER_CRATE)
+	g.shake = max(g.shake, 2.5)
+	g.freeze = max(g.freeze, 0.025)
+	haptic(.Stomp)
+	return true
+}
+
+// Breaks every crate the rectangle overlaps. Used with the player's box
+// nudged a pixel toward where it was going.
+crates_break_in :: proc(g: ^Game, r: rl.Rectangle, push: rl.Vector2) -> bool {
+	broke := false
+	x0, y0 := int(math.floor(r.x / TILE)), int(math.floor(r.y / TILE))
+	x1, y1 := int(math.floor((r.x + r.width - 0.01) / TILE)), int(math.floor((r.y + r.height - 0.01) / TILE))
+	for ty in y0 ..= y1 {
+		for tx in x0 ..= x1 {
+			if crate_break(g, tx, ty, push) {
+				broke = true
+			}
+		}
+	}
+	return broke
+}
+
+level_draw_gems :: proc(g: ^Game) {
+	anim := &g.assets.gem
+	for gem, i in g.level.gems {
+		if gem.taken && gem.pop <= 0 {
+			continue
+		}
+		frame := (int(g.time / anim.frame_time) + i * 2) % anim.count
+		pos := gem.pos + {0, math.sin(g.time * 3 + f32(i) * 0.6) * 1.5}
+		if gem.taken {
+			// Flies up and fades as it is taken.
+			k := gem.pop / 0.3
+			pos.y -= (1 - k) * 14
+			anim_draw_frame(anim, frame, pos, false, {255, 255, 255, u8(255 * k)})
+			continue
+		}
+		anim_draw_frame(anim, frame, pos, false)
+	}
+}
+
 // Checkpoints are taken by touching them; the flag at the end finishes the
 // level, and a secret exit finishes it too, opening a hidden level.
 level_update :: proc(g: ^Game, dt: f32) {
 	fruit_update(g, dt)
+	gems_update(g, dt)
 	if g.player.dead {
 		return
 	}
@@ -286,7 +407,7 @@ level_clear :: proc(g: ^Game, secret: bool) {
 		skins_before[s] = skin_unlocked(g, s)
 	}
 
-	save_record_clear(&g.save, d.ident, g.level_time, g.deaths, g.level.kept)
+	save_record_clear(&g.save, d.ident, g.level_time, g.deaths, g.level.kept, g.level.gems_got)
 	if secret && d.unlocks != "" {
 		save_find_secret(&g.save, d.unlocks)
 	}
@@ -299,6 +420,8 @@ level_clear :: proc(g: ^Game, secret: bool) {
 		new_medals = medals - medals_before,
 		fruit      = fruit_count(save_level(&g.save, d.ident).fruit),
 		fruit_of   = len(d.fruit),
+		gems       = g.level.gems_got,
+		gems_of    = g.level.gems_total,
 	}
 	for s in Skin {
 		if !skins_before[s] && skin_unlocked(g, s) {
@@ -311,6 +434,12 @@ level_clear :: proc(g: ^Game, secret: bool) {
 	spawn_burst(g, at - {0, 24}, colour, 30, 140, 1.5)
 	if !secret {
 		animator_restart(&g.exit_anim, &g.assets.marks.end_pressed)
+	}
+	spawn_confetti(g, at - {0, 30}, 60)
+	// And a shower from the top of the screen, over the card.
+	view := camera_view(g)
+	for i in 0 ..< 6 {
+		spawn_confetti(g, {view.x + view.width * (f32(i) + 0.5) / 6, view.y - 6}, 12)
 	}
 	play(&g.assets, .Clear)
 	haptic(.Clear)
