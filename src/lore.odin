@@ -19,7 +19,7 @@ GAME_TAGLINE :: "A SMALL LIGHT IN A DEEP PLACE"
 // 16:9 and the font runs a bit over 8px a character.
 LORE_INTRO := [?]cstring {
 	"REACH THE TROPHY. ONE TOUCH OF ANYTHING",
-	"SHARP AND YOU START AT THE LAST FLAG.",
+	"SHARP AND YOU START AT THE LAST LANTERN.",
 }
 
 // The how-to-play board. The parchment can be under 300px wide on a narrow

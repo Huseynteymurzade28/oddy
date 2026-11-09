@@ -157,10 +157,11 @@ gather_lights :: proc(g: ^Game) {
 		}
 	}
 
-	// Checkpoints glow once they are lit, and the flag at the end always does.
+	// Lit lanterns light the dark round them; the trophy at the end always
+	// glows.
 	for c in g.level.checkpoints {
-		if c.active && near(view, c.pos, 60) {
-			light(c.pos - {0, 20}, 54, {170, 160, 120, 255})
+		if c.lit && near(view, c.pos, 60) {
+			light(c.pos + LANTERN_OFFSET, 64, {190, 150, 90, 255})
 		}
 	}
 	light(g.level.exit - {0, 20}, 70, {200, 170, 100, 255})

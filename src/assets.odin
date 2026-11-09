@@ -97,9 +97,6 @@ Creature_Anims :: struct {
 }
 
 Checkpoint_Anims :: struct {
-	pole:        Anim, // not yet reached
-	flag_out:    Anim, // the flag going up
-	flag:        Anim, // flying
 	end:         Anim, // the trophy at the end of a level
 	end_pressed: Anim,
 }
@@ -234,9 +231,6 @@ assets_load :: proc(a: ^Assets) {
 
 	C :: "assets/sprites/objects/checkpoint/"
 	a.marks = {
-		pole        = anim_load(C + "pole.png", 64, 64, 1),
-		flag_out    = anim_load(C + "flag_out.png", 64, 64, 26, 0.03),
-		flag        = anim_load(C + "flag_idle.png", 64, 64, 10, 0.07, true),
 		end         = anim_load(C + "end_idle.png", 64, 64, 1),
 		end_pressed = anim_load(C + "end_pressed.png", 64, 64, 8, 0.06),
 	}
@@ -354,7 +348,7 @@ assets_unload :: proc(a: ^Assets) {
 		&a.traps.fan, &a.traps.fire_off, &a.traps.fire_hit, &a.traps.fire_on,
 		&a.traps.refill, &a.traps.refill_pop, &a.traps.spike_head, &a.traps.spike_head_blink,
 		&a.traps.spike_head_hit,
-		&a.marks.pole, &a.marks.flag_out, &a.marks.flag, &a.marks.end, &a.marks.end_pressed,
+		&a.marks.end, &a.marks.end_pressed,
 	}
 	unload_anims(traps[:])
 	rl.UnloadTexture(a.traps.chain)

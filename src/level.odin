@@ -18,11 +18,16 @@ only yours once you have stood on solid ground with it for a moment (or
 reached a checkpoint or the end). Die first and it goes back where it was.
 */
 
+// A checkpoint is a lantern on a post. Touching it lights it, and it stays
+// lit; the last one lit is where you come back.
 Checkpoint :: struct {
-	pos:    rl.Vector2, // the foot of the flag, which is also where you respawn
-	active: bool,
-	anim:   Animator, // the flag going up, then flying
+	pos:    rl.Vector2, // the foot of the post, which is also where you respawn
+	active: bool, // the one you come back to
+	lit:    bool,
+	flare:  f32, // the flash of lighting, fading
 }
+
+LANTERN_OFFSET :: rl.Vector2{5, -24} // from the foot of the post to the lantern
 
 Level :: struct {
 	index:       int, // into `g.levels`
@@ -198,6 +203,7 @@ level_reset_things :: proc(g: ^Game) {
 level_restart :: proc(g: ^Game) {
 	for &c in g.level.checkpoints {
 		c.active = false
+		c.lit = false
 	}
 	for &f in g.level.fruit {
 		f.state = .Waiting
@@ -392,10 +398,11 @@ level_update :: proc(g: ^Game, dt: f32) {
 			other.active = false
 		}
 		c.active = true
-		animator_restart(&c.anim, &g.assets.marks.flag_out)
+		c.lit = true
+		c.flare = 1
 		g.respawn = c.pos
 		keep_carried_fruit(g)
-		spawn_burst(g, c.pos - {0, 20}, {255, 230, 140, 255}, 14, 90, 1.2)
+		spawn_burst(g, c.pos + LANTERN_OFFSET, {255, 230, 140, 255}, 16, 90, 1.2)
 		play(&g.assets, .Checkpoint)
 		haptic(.Checkpoint)
 	}
@@ -460,18 +467,8 @@ level_clear :: proc(g: ^Game, secret: bool) {
 level_draw_flags :: proc(g: ^Game) {
 	m := &g.assets.marks
 	for &c in g.level.checkpoints {
-		// The pole stands 8px left of the middle of its 64px cell.
-		pos := c.pos + {8, 0}
-		switch {
-		case !c.active:
-			anim_draw_frame(&m.pole, 0, pos, false)
-		case c.anim.anim == &m.flag_out && !c.anim.finished:
-			animator_update(&c.anim, rl.GetFrameTime())
-			animator_draw(c.anim, pos, false)
-		case:
-			frame := int(g.time / 0.07) % 10
-			anim_draw_frame(&m.flag, frame, pos, false)
-		}
+		c.flare = max(0, c.flare - rl.GetFrameTime() * 1.5)
+		draw_lantern(g, c)
 	}
 	if g.exit_anim.anim != nil {
 		animator_update(&g.exit_anim, rl.GetFrameTime())
@@ -501,6 +498,53 @@ level_draw_fruit :: proc(g: ^Game) {
 			tint = {255, 255, 255, 110} // kept on an earlier visit
 		}
 		anim_draw_frame(anim, frame, f.pos, false, tint)
+	}
+}
+
+// A post with an arm, and a little lantern hanging from it: dim glass while
+// it is waiting, a flickering flame and warm light once lit, with fireflies
+// drifting round it.
+@(private = "file")
+draw_lantern :: proc(g: ^Game, c: Checkpoint) {
+	wood := rl.Color{122, 82, 52, 255}
+	dark := rl.Color{61, 36, 24, 255}
+	foot := c.pos
+	// The post and its arm.
+	rl.DrawRectangleV({foot.x - 2, foot.y - 30}, {3, 30}, dark)
+	rl.DrawRectangleV({foot.x - 1, foot.y - 30}, {1, 30}, wood)
+	rl.DrawRectangleV({foot.x - 2, foot.y - 31}, {9, 2}, dark)
+	rl.DrawRectangleV({foot.x - 4, foot.y - 1}, {7, 1}, dark)
+	lantern := foot + LANTERN_OFFSET
+	sway := math.sin(g.time * 1.7 + foot.x * 0.05) * (c.lit ? 0.6 : 0.3)
+	lantern.x += sway
+	rl.DrawLineV({foot.x + 5, foot.y - 29}, lantern - {0, 4}, dark) // the hook
+	body := rl.Rectangle{lantern.x - 3.5, lantern.y - 4, 7, 9}
+	if c.lit {
+		flicker := 0.85 + 0.15 * math.sin(g.time * 13 + foot.x)
+		rl.BeginBlendMode(.ADDITIVE)
+		glow := u8(60 * flicker + 80 * c.flare)
+		rl.DrawCircleGradient(lantern + {0, 0.5}, 18 + 10 * c.flare, {255, 190, 100, glow}, {0, 0, 0, 0})
+		rl.EndBlendMode()
+		rl.DrawRectangleRec(body, {255, 214, 130, 255})
+		rl.DrawRectangleV({lantern.x - 1.5, lantern.y - 1 + (1 - flicker) * 2}, {3, 4}, {255, 250, 220, 255})
+	} else {
+		rl.DrawRectangleRec(body, {110, 106, 120, 255})
+		rl.DrawRectangleV({lantern.x - 2.5, lantern.y - 3}, {2, 3}, {150, 146, 160, 255})
+	}
+	rl.DrawRectangleLinesEx(body, 1, dark)
+	rl.DrawRectangleV({lantern.x - 4.5, lantern.y - 5}, {9, 2}, dark) // cap
+	rl.DrawRectangleV({lantern.x - 2.5, lantern.y + 5}, {5, 1.5}, dark) // base
+	if c.lit {
+		// Fireflies keep it company.
+		rl.BeginBlendMode(.ADDITIVE)
+		for i in 0 ..< 3 {
+			t := g.time * 0.8 + f32(i) * 2.1 + foot.x
+			pos := lantern + {math.cos(t) * (10 + f32(i) * 3), math.sin(t * 1.3) * 7 - 2}
+			a := u8(120 + 100 * math.sin(t * 4))
+			rl.DrawCircleV(pos, 1, {240, 255, 150, a})
+			rl.DrawCircleV(pos, 2.5, {240, 255, 150, a / 4})
+		}
+		rl.EndBlendMode()
 	}
 }
 
