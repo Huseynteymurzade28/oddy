@@ -22,7 +22,7 @@ renamed for what they do in the game (`jump.wav` was `sfx_movement_jump1.wav`).
 
 Every asset in the game now has a known source and licence.
 
-## Drawn for Oddy
+## Drawn for this game
 
 `sprites/terrain/` (the ground, grass, flowers, bridges, water, lava and
 crates of each world), `sprites/background/` (the skies, clouds, mountains,

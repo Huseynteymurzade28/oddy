@@ -25,10 +25,10 @@ when !IS_MOBILE {
 run :: proc() {
 	when IS_MOBILE {
 		rl.SetConfigFlags({.FULLSCREEN_MODE, .VSYNC_HINT})
-		rl.InitWindow(0, 0, "Oddy")
+		rl.InitWindow(0, 0, "Lumi & the Hollow")
 	} else {
 		rl.SetConfigFlags({.WINDOW_RESIZABLE, .VSYNC_HINT})
-		rl.InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Oddy")
+		rl.InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Lumi & the Hollow")
 		rl.SetWindowMinSize(640, 360)
 		rl.SetWindowPosition(200, 120)
 	}

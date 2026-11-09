@@ -3,4 +3,5 @@ oddy
 /build/
 /libs/raylib/*/libraylib.a
 /levels/backups/
-/oddy_save.json
+/lumi_save.json
+lumi

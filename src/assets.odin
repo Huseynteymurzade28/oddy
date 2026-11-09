@@ -141,7 +141,7 @@ Assets :: struct {
 	enemy:   [Enemy_Kind]Creature_Anims,
 	warden:  Creature_Anims, // world 3's boss: the big rock
 	marks:   Checkpoint_Anims,
-	// Oddy's own art, drawn by tools/art/make_art.py: per world, the
+	// The game's own art, drawn by tools/art/make_art.py: per world, the
 	// terrain sheet and the parallax layers.
 	terrain: [Zone]rl.Texture2D,
 	layers:  [Zone][BG_LAYERS]rl.Texture2D,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draws all of Oddy's own environment art into assets/sprites/:
+"""Draws all of the game's own environment art into assets/sprites/:
 
     terrain/<world>.png          the ground, platforms, liquid, crates (terrain.py)
     background/<world>_<n>.png   the five parallax layers (backgrounds.py)

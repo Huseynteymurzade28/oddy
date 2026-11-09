@@ -90,8 +90,9 @@ draw_title_screen :: proc(g: ^Game) {
 	t := min(g.state_time * 2.2, 1)
 	drop := (1 - t) * (1 - t) * -40 + math.sin(t * math.PI) * 3
 	bob := math.sin(g.time * 1.8) * 1.5
-	draw_text_outlined_centered(a, GAME_TITLE, 20 + drop + bob, 48, GOLD, GOLD_LIGHT)
-	draw_text_outlined_centered(a, GAME_TAGLINE, 74, 8, {222, 200, 255, 255})
+	draw_text_outlined_centered(a, GAME_TITLE, 12 + drop + bob, 48, GOLD, GOLD_LIGHT)
+	draw_text_outlined_centered(a, GAME_TITLE_TAIL, 62 + drop * 0.5, 16, {255, 236, 200, 255}, {255, 250, 230, 255})
+	draw_text_outlined_centered(a, GAME_TAGLINE, 82, 8, {240, 226, 255, 255})
 
 	draw_panel(g, menu_panel(g))
 	draw_menu(g)

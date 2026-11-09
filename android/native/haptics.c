@@ -1,4 +1,4 @@
-// Vibration for Oddy on Android, called from the game through JNI.
+// Vibration for Lumi & the Hollow on Android, called from the game through JNI.
 //
 // The app has no Java of its own (it is a NativeActivity), so the Vibrator
 // service is reached the long way: the activity object raylib's native glue

@@ -18,7 +18,7 @@ ANDROID_API=29
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 out="$root/libs/raylib"
-work="${TMPDIR:-/tmp}/oddy-raylib-$RAYLIB_TAG"
+work="${TMPDIR:-/tmp}/lumi-raylib-$RAYLIB_TAG"
 targets=("${@:-linux android}")
 targets=(${targets[@]})
 

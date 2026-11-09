@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds build/oddy.apk: the game as a NativeActivity for arm64 phones.
+# Builds build/lumi.apk: the game as a NativeActivity for arm64 phones.
 #
 #   tools/build_android.sh           build and sign the APK
 #   tools/build_android.sh install   ...then install it on the connected device
@@ -33,7 +33,7 @@ version_flags=()
 (( ${#version_flags[@]} )) && version_flags+=(--replace-version)
 
 build="$root/build/android"
-apk="$root/build/oddy.apk"
+apk="$root/build/lumi.apk"
 rm -rf "$build"
 mkdir -p "$build/stage/assets" "$build/lib/arm64-v8a"
 
@@ -82,6 +82,6 @@ case "${1:-}" in
 install) "$adb" install -r "$apk" ;;
 run)
 	"$adb" install -r "$apk"
-	"$adb" shell am start -n com.flear.oddy/android.app.NativeActivity
+	"$adb" shell am start -n com.flear.lumi/android.app.NativeActivity
 	;;
 esac

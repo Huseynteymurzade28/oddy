@@ -6,7 +6,7 @@ import "core:strings"
 import rl "../libs/raylib"
 
 /*
-Reading the levels out of `levels/oddy.ldtk`, the LDtk project they are drawn
+Reading the levels out of `levels/lumi.ldtk`, the LDtk project they are drawn
 in. Only the parts the game needs are read; everything else in the file is the
 editor's business.
 
@@ -31,7 +31,7 @@ its neighbours are solid (see `tilemap.odin`), so drawing a shape in the
 Collision layer is all a level needs.
 */
 
-LEVELS_PATH :: "levels/oddy.ldtk"
+LEVELS_PATH :: "levels/lumi.ldtk"
 
 Hint :: struct {
 	pos:  rl.Vector2, // bottom centre of the text

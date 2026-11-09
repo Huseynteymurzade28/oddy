@@ -1,11 +1,11 @@
-# Oddy
+# Lumi & the Hollow
 
-*(working title)*
-
-A hard, precision platformer for Android phones. Dash, wall-jump and climb
-down through the layers of the Hollow: one touch of anything sharp and you are
-back at the last checkpoint, with the clock still running and the death count
-one higher.
+A cozy, hard little platformer for Android phones. Lumi is a small light, and
+the Hollow under the town of Greyreach goes down in layers: a garden, a
+drowned town, a warm heart of embers, each with something keeping the way
+down. Dash, wall-jump, swim and bounce your way to the bottom; one touch of
+anything sharp and you are back at the last lantern, with the clock still
+running.
 
 Built in [Odin](https://odin-lang.org) on [raylib](https://www.raylib.com), as
 a NativeActivity with no Java.
@@ -17,7 +17,7 @@ a NativeActivity with no Java.
 
 ## Play it
 
-Download `oddy-<version>.apk` from the [Releases](../../releases) page and
+Download `lumi-<version>.apk` from the [Releases](../../releases) page and
 open it on the phone (Android 10 or newer, arm64); the phone will ask to allow
 installs from wherever you opened it. Every push to `main` also builds an APK,
 attached to its run on the [Actions](../../actions) page.
@@ -119,15 +119,15 @@ While a boss is stunned, or recovering, bumping into it is harmless.
 
 ## Where it is
 
-Oddy started as a procedural run-based shooter for desktop (that version is
-tagged `shooter-final`). It is being rebuilt as a hand-made world-map
+The project started as Oddy, a procedural run-based shooter for desktop (that
+version is tagged `shooter-final`). It is being rebuilt as a hand-made world-map
 platformer for phones: three worlds of five levels each, the last of each a
 boss you beat without a gun.
 
 1. **Movement** — done: coyote time, jump buffering, variable jump height,
    wall jumps, an 8-way dash, super and hyper jumps, one-hit deaths with an
    instant respawn.
-2. **LDtk levels** — done: `levels/oddy.ldtk`.
+2. **LDtk levels** — done: `levels/lumi.ldtk`.
 3. **Traps, moving pieces and creatures** — done: saws, moving and falling
    platforms, trampolines, fans, fire, arrow shooters, dash balloons, a
    spiked head that drops on you; pigs, slimes, rinos, bats and bees to land
@@ -149,7 +149,7 @@ boss you beat without a gun.
 
 ```
 tools/build_raylib.sh android    # once: raylib for arm64, with the NDK
-tools/build_android.sh           # build/oddy.apk
+tools/build_android.sh           # build/lumi.apk
 tools/build_android.sh run       # ...then install it on the connected phone and start it
 ```
 
@@ -172,8 +172,8 @@ levels and movement. It is a development tool, not a release.
 
 ```
 tools/build_raylib.sh linux      # once
-odin run src -out:oddy           # keyboard
-odin run src -out:oddy -define:TOUCH=true   # the phone's touch layout, with the mouse as one finger
+odin run src -out:lumi           # keyboard
+odin run src -out:lumi -define:TOUCH=true   # the phone's touch layout, with the mouse as one finger
 ```
 
 Run it from the repo root (asset paths are relative). `F5` reads the levels
@@ -181,7 +181,7 @@ file again, `F11` toggles fullscreen.
 
 ## Editing levels
 
-The levels live in one [LDtk](https://ldtk.io) project, `levels/oddy.ldtk`,
+The levels live in one [LDtk](https://ldtk.io) project, `levels/lumi.ldtk`,
 and are played in the order LDtk lists them. Open it in LDtk 1.5, draw, save,
 and press `F5` in the running game: it reads the file again and restarts the
 level you are on.
@@ -245,7 +245,7 @@ nothing but import cycles, so files are grouped by prefix instead.
 | `input.odin` | keyboard and touch, read into one `Input` per frame |
 | `player.odin` | movement, jumps, the dash, death and respawn |
 | `physics.odin` | axis-separated AABB vs tiles, one-way platforms |
-| `ldtk.odin` | reading `levels/oddy.ldtk` |
+| `ldtk.odin` | reading `levels/lumi.ldtk` |
 | `level.odin` | the level being played: checkpoints, the exits, fruit, hints |
 | `worldmap.odin` | the world map and the hero picker |
 | `progress.odin` | what is open and what is earned: unlocks, medals, heroes |
@@ -286,7 +286,7 @@ Odin or raylib package happens to ship.
 ## Credits
 
 The worlds themselves (ground, grass and flowers, bridges, water, skies and
-backdrops) and the launcher icon are drawn for Oddy by `tools/art/make_art.py`.
+backdrops) and the launcher icon are drawn for the game by `tools/art/make_art.py`.
 Music by Juhani Junkala (CC0). Characters and traps
 are from Pixel Frog's Pixel Adventure 1 and 2 (CC-BY 4.0: heroes, creatures,
 traps, fruit), menus from Kenney's

@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-	Oddy for Android. A NativeActivity: there is no Java in the app, raylib's
+	Lumi & the Hollow for Android. A NativeActivity: there is no Java in the app, raylib's
 	native glue starts the game from `liboddy.so`. See tools/build_android.sh.
 
 	Predictive back is switched off so Back reaches the game as a key (it
 	pauses, and Back again on the pause card leaves) instead of closing it.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-	package="com.flear.oddy"
+	package="com.flear.lumi"
 	android:versionCode="1"
 	android:versionName="1.0">
 

@@ -15,7 +15,7 @@ looks there too when reading, so the same relative name works on a phone and
 on the desktop (where it lands in the working directory).
 */
 
-SAVE_PATH :: "oddy_save.json"
+SAVE_PATH :: "lumi_save.json"
 SAVE_VERSION :: 1
 
 Level_Save :: struct {

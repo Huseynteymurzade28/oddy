@@ -7,10 +7,12 @@ board and the cards can never drift apart.
 The story, such as it is: far under the town of Greyreach is the Hollow, and
 the Hollow goes down in layers. At the top it has gone to garden; below that
 is a town the water took long ago; at the bottom is its warm heart. Something
-keeps the way down from each layer to the next. Oddy goes down anyway.
+keeps the way down from each layer to the next. Lumi, a small light,
+goes down anyway.
 */
 
-GAME_TITLE :: "ODDY"
+GAME_TITLE :: "LUMI"
+GAME_TITLE_TAIL :: "& THE HOLLOW"
 GAME_TAGLINE :: "ALL THE WAY DOWN THE HOLLOW"
 
 // Lines are kept under about 44 characters: the virtual screen is 427px wide at
@@ -50,4 +52,4 @@ WORLD_BLURBS := [WORLDS][2]cstring {
 
 // The card after the last boss.
 LORE_END_TITLE :: "THE HOLLOW IS QUIET"
-LORE_END_LINE :: "ODDY CLIMBS BACK UP TO THE SUN."
+LORE_END_LINE :: "LUMI CLIMBS BACK UP TO THE SUN."
