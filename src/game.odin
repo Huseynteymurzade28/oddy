@@ -43,6 +43,7 @@ Game :: struct {
 	arrows:       [dynamic]Arrow,
 	boss:         Boss,
 	waves:        [dynamic]Wave,
+	rocks:        [dynamic]Rock,
 	boss_intro:   f32, // the boss's name, fading out
 	decor:        [dynamic]Decor, // torches, roots, crystals: drawn in code, mostly lit
 	motes:        [dynamic]Mote, // what drifts through the air
@@ -94,6 +95,7 @@ game_destroy :: proc(g: ^Game) {
 	delete(g.enemies)
 	delete(g.arrows)
 	delete(g.waves)
+	delete(g.rocks)
 	delete(g.decor)
 	delete(g.motes)
 	delete(g.liquid_glows)

@@ -23,6 +23,8 @@ one of `Thing_Kind`; its rectangle there is what it is read from:
   Refill            a balloon that gives the dash back when it is spent, then
                     grows back.
   Spike_Head        drops on you when you are under it, then climbs back.
+  Geyser            bubbles for a moment, then erupts: stand on it then and
+                    it throws you high. The rectangle's height is its reach.
 
 The creatures (`Pig` and on) are read the same way; see `enemy.odin`.
 
@@ -40,6 +42,7 @@ Thing_Kind :: enum u8 {
 	Arrow_Shooter,
 	Refill,
 	Spike_Head,
+	Geyser,
 	// creatures, in the same order as `Enemy_Kind`
 	Pig,
 	Slime,
@@ -66,6 +69,10 @@ ARROW_SPEED :: 170.0
 // rock could cross half a level and kill you before you ever saw it.
 ARROW_RANGE :: 18 * TILE
 REFILL_RESPAWN :: 2.5
+GEYSER_REST :: 1.4
+GEYSER_WARN :: 0.6
+GEYSER_BLOW :: 1.0
+GEYSER_LAUNCH :: 470.0
 HEAD_SIZE :: 34.0 // the spiked block's hitbox, a little inside its spikes
 HEAD_FALL_ACCEL :: 1500.0
 HEAD_MAX_FALL :: 520.0
@@ -109,6 +116,9 @@ thing_make :: proc(d: Thing_Data) -> Thing {
 		t.pos = {r.x, r.y}
 	case .Trampoline, .Fire:
 		t.pos = {r.x + r.width / 2, r.y + r.height} // bottom centre
+	case .Geyser:
+		t.pos = {r.x + r.width / 2, r.y + r.height}
+		t.timer = d.delay
 	case .Fan:
 		t.pos = {r.x + r.width / 2, r.y + r.height}
 	case .Arrow_Shooter, .Refill, .Spike_Head:
@@ -291,6 +301,36 @@ things_update :: proc(g: ^Game, dt: f32) {
 		case .Spike_Head:
 			spike_head_update(g, &t, dt)
 
+		case .Geyser:
+			t.timer -= dt
+			switch t.state {
+			case 0:
+				if t.timer <= 0 {
+					t.state = 1
+					t.timer = GEYSER_WARN
+				}
+			case 1:
+				if int(g.time * 30) % 3 == 0 {
+					spawn_spark(g, t.pos + {f32(int(g.time * 97) % 9) - 4, -2}, {0, -1}, {255, 200, 120, 255}, 50, 1)
+				}
+				if t.timer <= 0 {
+					t.state = 2
+					t.timer = GEYSER_BLOW
+					if rl.Vector2Distance(t.pos, p.pos) < view_size().x * 0.7 {
+						play(&g.assets, .Bounce)
+					}
+				}
+			case 2:
+				column := rl.Rectangle{t.pos.x - 9, t.pos.y - geyser_reach(t), 18, geyser_reach(t)}
+				if !p.dead && p.dash_time <= 0 && rl.CheckCollisionRecs(pr, column) && p.vel.y > -GEYSER_LAUNCH * 0.8 {
+					player_bounce(g, GEYSER_LAUNCH)
+				}
+				if t.timer <= 0 {
+					t.state = 0
+					t.timer = GEYSER_REST
+				}
+			}
+
 		case .Pig, .Slime, .Rino, .Bat, .Bee:
 		}
 		t.delta = t.pos - before
@@ -362,6 +402,10 @@ spike_head_update :: proc(g: ^Game, t: ^Thing, dt: f32) {
 @(private = "file")
 near_player :: proc(g: ^Game, pos: rl.Vector2) -> bool {
 	return rl.Vector2Distance(pos, g.player.pos) < view_size().x * 0.7
+}
+
+geyser_reach :: proc(t: Thing) -> f32 {
+	return max(t.data.rect.height, TILE * 2)
 }
 
 head_rect :: proc(t: Thing) -> rl.Rectangle {
@@ -490,6 +534,8 @@ things_draw :: proc(g: ^Game) {
 				// A faint outline of where it will grow back.
 				rl.DrawCircleLinesV(t.pos, 5 * (1 - t.timer / REFILL_RESPAWN) + 1, {255, 255, 255, 60})
 			}
+		case .Geyser:
+			draw_geyser(g, t)
 		case .Spike_Head:
 			pos := t.pos + {0, 26}
 			if t.state == 4 {
@@ -505,6 +551,28 @@ things_draw :: proc(g: ^Game) {
 	}
 	for ar in g.arrows {
 		draw_arrow(ar)
+	}
+}
+
+// A vent in the rock: a dark mouth with a glowing rim. Bubbling, it sends up
+// sparks; erupting, a column of hot spray to the top of its reach.
+@(private = "file")
+draw_geyser :: proc(g: ^Game, t: Thing) {
+	base := t.pos
+	rl.DrawEllipse(i32(base.x), i32(base.y - 1), 9, 3, {60, 30, 40, 255})
+	rl.DrawEllipse(i32(base.x), i32(base.y - 1), 6, 1.8, t.state == 0 ? rl.Color{150, 70, 50, 255} : rl.Color{255, 170, 80, 255})
+	if t.state != 2 {
+		return
+	}
+	reach := geyser_reach(t)
+	k := clamp(t.timer / GEYSER_BLOW, 0, 1)
+	for i in 0 ..< 14 {
+		f := f32(i) / 14
+		y := base.y - reach * f
+		w := 6 + 3 * math.sin(g.time * 20 + f32(i)) + (1 - f) * 2
+		col := lerp_color({255, 240, 170, 255}, {255, 110, 60, 0}, f)
+		col.a = u8(f32(col.a) * (0.4 + 0.6 * k))
+		rl.DrawEllipse(i32(base.x + math.sin(g.time * 13 + f32(i) * 0.7) * 2), i32(y), w, 6, col)
 	}
 }
 

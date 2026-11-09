@@ -139,6 +139,7 @@ Assets :: struct {
 	critters: rl.Texture2D, // butterflies and a bird, drawn by tools/art
 	traps:   Trap_Anims,
 	enemy:   [Enemy_Kind]Creature_Anims,
+	warden:  Creature_Anims, // world 3's boss: the big rock
 	marks:   Checkpoint_Anims,
 	// Oddy's own art, drawn by tools/art/make_art.py: per world, the
 	// terrain sheet and the parallax layers.
@@ -267,6 +268,11 @@ assets_load :: proc(a: ^Assets) {
 		run  = bat,
 		hit  = anim_load(E + "bat/hit.png", 46, 30, 5, 0.06, false, 27),
 	}
+	a.warden = {
+		idle = anim_load(E + "rock/big_idle.png", 38, 34, 14, 0.07, true),
+		run  = anim_load(E + "rock/big_run.png", 38, 34, 14, 0.04, true),
+		hit  = anim_load(E + "rock/big_hit.png", 38, 34, 5, 0.05),
+	}
 	bee := anim_load(E + "bee/idle.png", 36, 34, 6, 0.07, true, 33)
 	a.enemy[.Bee] = {
 		idle = bee,
@@ -357,6 +363,10 @@ assets_unload :: proc(a: ^Assets) {
 	unload_anims(traps[:])
 	rl.UnloadTexture(a.traps.chain)
 	rl.UnloadTexture(a.traps.spikes)
+	{
+		w := [?]^Anim{&a.warden.idle, &a.warden.run, &a.warden.hit}
+		unload_anims(w[:])
+	}
 	for kind in Enemy_Kind {
 		c := &a.enemy[kind]
 		creature := [?]^Anim{&c.idle, &c.run, &c.hit}

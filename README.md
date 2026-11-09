@@ -43,11 +43,13 @@ On a keyboard: left and right, `Q` `E` for worlds, `Enter`, `H`, `Esc`.
 
 - **The Moss** (1-1 to 1-5): the basics, trampolines, fans, creatures, and at
   the end the Ooze King.
-- **The Drowned Halls** (2-1 on): water you can swim in. You sink slowly,
-  jump strokes you upward, a stroke at the surface throws you out, and the
-  water gives your dash back. Underwater tunnels, walls to dive under,
-  spiked heads in the halls.
-- **The Ember Deep**: still to come. Here the liquid is lava, and kills.
+- **The Drowned Halls** (2-1 to 2-5): water you can swim in. You sink
+  slowly, jump strokes you upward, a stroke at the surface throws you out,
+  and the water gives your dash back. Underwater tunnels, walls to dive
+  under, spiked heads, a lift, and the Broodmother.
+- **The Ember Deep** (3-1 to 3-5): the liquid is lava and kills. Geysers
+  bubble, then erupt and throw you high; fire, saws over lava, a climb up a
+  chimney of ash, a gauntlet of everything, and the Warden.
 
 ## Bosses
 
@@ -59,6 +61,17 @@ shut until it is down; dying puts it back at full strength.
   sends a ripple along the floor to jump. Just after it lands it sags, open:
   land on it. Three hits; each makes it smaller and quicker, and from the
   second on it sheds little slimes. A hit throws you clear.
+- **The Broodmother** (2-5). She sweeps the top of the arena, screeches and
+  flushes red as she picks her spot, then dives at where you are: step
+  aside. Crashing into the floor stuns her. From the second hit she calls her
+  young.
+- **The Warden** (3-5). It paws the ground, then charges the length of the
+  arena: jump it. It crashes into the wall behind you and is dazed for long
+  enough to run the arena. Once hit, every crash shakes rocks loose, marked
+  where they will land, and always behind you, so stepping out from under
+  them takes you toward it.
+
+While a boss is stunned, or recovering, bumping into it is harmless.
 
 ## Things to find and break
 
@@ -124,10 +137,8 @@ boss you beat without a gun.
    crates, combos, confetti, butterflies and birds, flowers in the breeze.
 5. **The map** — done: the world map, saving, fruit, medals, secret exits
    (1-1 hides one, into the secret level 1-S), four heroes.
-6. **Levels and bosses** — under way: world 1 complete (1-1 to 1-4, the
-   secret 1-S, the Ooze King in 1-5), world 2 begun (2-1, 2-2) with
-   swimming. Still to come: 2-3 to 2-5 and the Broodmother, world 3 and the
-   Warden.
+6. **Levels and bosses** — done: three worlds of five levels, a secret
+   level, swimming, geysers, and three bosses.
 7. Music per world, more art, the name.
 
 ## Building
@@ -194,7 +205,8 @@ level you are on.
   | `Rino` | charges when you are level with it, dazed when it hits a wall |
   | `Bat` | swings three tiles either side of where it is placed |
   | `Bee` | bobs up and down |
-  | `Ooze_King` | world 1's boss; the level's exit opens when it is beaten |
+  | `Geyser` | bubbles, then erupts and throws you up to its height (`Delay`) |
+  | `Ooze_King`, `Broodmother`, `Warden` | the bosses; the level's exit opens when it is beaten |
 
   Land on a creature to kill it: you bounce and get the dash back. Touching
   one any other way, or any trap, is a death. Everything is put back as it

@@ -176,6 +176,7 @@ level_reset_things :: proc(g: ^Game) {
 	clear(&g.enemies)
 	clear(&g.arrows)
 	clear(&g.waves)
+	clear(&g.rocks)
 	// The boss comes back at full strength, unless it is already beaten.
 	d := &g.levels[g.level.index]
 	if d.has_boss && !g.boss.beaten {
