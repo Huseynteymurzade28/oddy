@@ -1,24 +1,18 @@
 package game
 
-import "core:math"
 import rl "../libs/raylib"
 
 /*
 What the player asked for this frame, whichever device it came from. Nothing
-outside this file reads the keyboard, the mouse or the touch screen: the game
-reads `g.input`, so the same rules run on a desktop and on a phone.
+outside this file reads the keyboard or the touch screen: the game reads
+`g.input`, so the same rules run on a desktop and on a phone.
 
 On a phone the screen is split in two:
 
-  left half   a floating stick — wherever the thumb lands is its centre.
-              Sideways moves, pulling down drops through platforms.
-  right half  the jump button sits in the corner; a touch anywhere else on
-              that side is an aim stick that fires while held. Held still,
-              the gun picks the nearest thing it can see; dragged, it points
-              the way you drag, and keeps pointing there until you let go,
-              even if the thumb drifts back to the middle.
-
-The interact button only exists while there is something in reach.
+  left half   a floating stick: wherever the thumb lands is its centre. It
+              steers, aims the dash in any of eight directions, and pulled
+              down it drops through platforms.
+  right half  two buttons in the corner: jump, and dash beside it.
 
 Desktop builds can play with the touch layout too, using the mouse as one
 finger: build with `-define:TOUCH=true`.
@@ -29,28 +23,19 @@ TOUCH_CONTROLS :: IS_MOBILE || TOUCH_ON_DESKTOP
 
 STICK_RADIUS :: 26.0 // how far the knob travels, in virtual pixels
 STICK_DEAD :: 3.0
-AIM_RADIUS :: 26.0 // the aim stick's reach; past it the centre follows the thumb
-AIM_DRAG :: 5.0 // how far the fire thumb moves before it counts as aiming
 BUTTON_RADIUS :: 27.0
-INTERACT_RADIUS :: 19.0
+DASH_RADIUS :: 23.0
 
 Input :: struct {
-	move:      f32, // -1 .. 1
-	down:      bool,
+	move:      f32, // -1 .. 1, left to right
+	move_y:    f32, // -1 .. 1, up to down: only aims the dash
+	down:      bool, // drop through a platform
 	jump:      bool, // pressed this frame
 	jump_held: bool,
-	fire:      bool,
-	interact:  bool,
+	dash:      bool, // pressed this frame
 	confirm:   bool, // a key that presses the marked menu button
 	nav:       int, // a key that moves the menu marker: -1 up, +1 down
 	pause:     bool, // pause in play; back out of a menu
-
-	// Where to aim. A mouse gives a point in the world; a dragged thumb gives a
-	// direction; a plain tap on fire gives neither, and the gun picks a target.
-	aim_point: rl.Vector2,
-	has_point: bool,
-	aim_dir:   rl.Vector2,
-	has_dir:   bool,
 }
 
 // The thumbs currently down, remembered between frames so a touch keeps the
@@ -59,13 +44,8 @@ Touch_State :: struct {
 	stick_id:     i32,
 	stick_origin: rl.Vector2,
 	stick_pos:    rl.Vector2,
-	fire_id:      i32,
-	fire_origin:  rl.Vector2,
-	fire_pos:     rl.Vector2,
-	aiming:       bool, // this fire thumb has been dragged, so it owns the aim
-	aim_dir:      rl.Vector2,
 	jump_id:      i32,
-	interact_id:  i32,
+	dash_id:      i32,
 	seen:         [dynamic]i32, // ids that were down last frame
 	any_tap:      bool, // a new touch began this frame, anywhere
 }
@@ -74,9 +54,8 @@ NO_TOUCH :: -1
 
 touch_init :: proc(t: ^Touch_State) {
 	t.stick_id = NO_TOUCH
-	t.fire_id = NO_TOUCH
 	t.jump_id = NO_TOUCH
-	t.interact_id = NO_TOUCH
+	t.dash_id = NO_TOUCH
 }
 
 touch_destroy :: proc(t: ^Touch_State) {
@@ -90,16 +69,10 @@ jump_button_pos :: proc() -> rl.Vector2 {
 	return {view.x - 38, view.y - 40}
 }
 
-// Where the aim stick rests when no thumb is on it. It is only a hint: the
-// stick starts wherever the thumb lands.
-fire_button_pos :: proc() -> rl.Vector2 {
+// The dash sits up and to the left of jump, where the thumb rolls to it.
+dash_button_pos :: proc() -> rl.Vector2 {
 	view := view_size()
-	return {view.x - 110, view.y - 46}
-}
-
-interact_button_pos :: proc() -> rl.Vector2 {
-	view := view_size()
-	return {view.x - 44, view.y - 104}
+	return {view.x - 98, view.y - 62}
 }
 
 stick_hint_pos :: proc() -> rl.Vector2 {
@@ -153,22 +126,19 @@ input_poll :: proc(g: ^Game) -> Input {
 @(private = "file")
 poll_desktop :: proc(g: ^Game) -> Input {
 	in_: Input
-	if rl.IsKeyDown(.A) || rl.IsKeyDown(.LEFT) {
-		in_.move -= 1
-	}
-	if rl.IsKeyDown(.D) || rl.IsKeyDown(.RIGHT) {
-		in_.move += 1
-	}
-	in_.down = rl.IsKeyDown(.S) || rl.IsKeyDown(.DOWN)
-	in_.jump = rl.IsKeyPressed(.SPACE) || rl.IsKeyPressed(.W) || rl.IsKeyPressed(.UP)
-	in_.jump_held = rl.IsKeyDown(.SPACE) || rl.IsKeyDown(.W) || rl.IsKeyDown(.UP)
-	in_.fire = rl.IsMouseButtonDown(.LEFT)
-	in_.interact = rl.IsKeyPressed(.E)
-	in_.confirm = rl.IsKeyPressed(.SPACE) || rl.IsKeyPressed(.ENTER)
+	key :: rl.IsKeyDown
+	hit :: rl.IsKeyPressed
+	if key(.A) || key(.LEFT) {in_.move -= 1}
+	if key(.D) || key(.RIGHT) {in_.move += 1}
+	if key(.W) || key(.UP) {in_.move_y -= 1}
+	if key(.S) || key(.DOWN) {in_.move_y += 1}
+	in_.down = key(.S) || key(.DOWN)
+	in_.jump = hit(.SPACE) || hit(.C) || hit(.J)
+	in_.jump_held = key(.SPACE) || key(.C) || key(.J)
+	in_.dash = hit(.LEFT_SHIFT) || hit(.RIGHT_SHIFT) || hit(.X) || hit(.K)
+	in_.confirm = hit(.SPACE) || hit(.ENTER)
 	in_.nav = menu_nav()
-	in_.pause = rl.IsKeyPressed(.ESCAPE) || rl.IsKeyPressed(.P)
-	in_.aim_point = rl.GetScreenToWorld2D(rl.GetMousePosition(), g.camera)
-	in_.has_point = true
+	in_.pause = hit(.ESCAPE) || hit(.P)
 	return in_
 }
 
@@ -183,53 +153,43 @@ poll_touch :: proc(g: ^Game) -> Input {
 	if !contains(ids[:], t.stick_id) {
 		t.stick_id = NO_TOUCH
 	}
-	if !contains(ids[:], t.fire_id) {
-		t.fire_id = NO_TOUCH
-	}
 	if !contains(ids[:], t.jump_id) {
 		t.jump_id = NO_TOUCH
 	}
-	if !contains(ids[:], t.interact_id) {
-		t.interact_id = NO_TOUCH
+	if !contains(ids[:], t.dash_id) {
+		t.dash_id = NO_TOUCH
 	}
 
 	t.any_tap = false
-	interact_shown := g.state == .Playing && interact_available(g)
-
 	for id, i in ids {
 		p := pos[i]
 		if id == t.stick_id {
 			t.stick_pos = p
 			continue
 		}
-		if id == t.fire_id {
-			t.fire_pos = p
-			continue
-		}
-		if id == t.jump_id || id == t.interact_id || contains(t.seen[:], id) {
+		if id == t.jump_id || id == t.dash_id || contains(t.seen[:], id) {
 			continue // a touch that started on nothing stays on nothing
 		}
 
-		// A new touch: it takes whichever job its position asks for.
+		// A new touch: it takes whichever job its position asks for. The two
+		// buttons split the right side between them by distance, so a thumb
+		// landing between them still presses one.
 		t.any_tap = true
+		to_jump := rl.Vector2Distance(p, jump_button_pos())
+		to_dash := rl.Vector2Distance(p, dash_button_pos())
 		switch {
 		case g.state == .Playing && rl.CheckCollisionPointRec(p, grow(pause_button_rect(), 6)):
 			in_.pause = true
-		case interact_shown && rl.Vector2Distance(p, interact_button_pos()) < INTERACT_RADIUS + 6:
-			t.interact_id = id
-			in_.interact = true
-		case rl.Vector2Distance(p, jump_button_pos()) < BUTTON_RADIUS + 10:
-			t.jump_id = id
-			in_.jump = true
 		case p.x < view.x * 0.45:
 			t.stick_id = id
 			t.stick_origin = p
 			t.stick_pos = p
+		case to_dash < to_jump:
+			t.dash_id = id
+			in_.dash = true
 		case:
-			t.fire_id = id
-			t.fire_origin = p
-			t.fire_pos = p
-			t.aiming = false
+			t.jump_id = id
+			in_.jump = true
 		}
 	}
 
@@ -239,43 +199,18 @@ poll_touch :: proc(g: ^Game) -> Input {
 	if t.stick_id != NO_TOUCH {
 		d := t.stick_pos - t.stick_origin
 		// The centre follows a thumb that wanders too far, so the stick never
-		// needs re-planting halfway through a fight.
+		// needs re-planting halfway through a level.
 		if l := rl.Vector2Length(d); l > STICK_RADIUS {
 			t.stick_origin += d * (1 - STICK_RADIUS / l)
 			d = t.stick_pos - t.stick_origin
 		}
-		if abs(d.x) > STICK_DEAD {
+		if rl.Vector2Length(d) > STICK_DEAD {
 			in_.move = clamp(d.x / (STICK_RADIUS * 0.6), -1, 1)
+			in_.move_y = clamp(d.y / (STICK_RADIUS * 0.6), -1, 1)
 		}
 		in_.down = d.y > STICK_RADIUS * 0.6 && abs(d.x) < d.y
 	}
-
 	in_.jump_held = t.jump_id != NO_TOUCH
-	in_.fire = t.fire_id != NO_TOUCH
-	if in_.fire {
-		d := t.fire_pos - t.fire_origin
-		l := rl.Vector2Length(d)
-		// Like the move stick, the centre is dragged along behind a thumb
-		// that goes past the rim, so swinging the aim round is always a short
-		// move whichever way it was pointing.
-		if l > AIM_RADIUS {
-			t.fire_origin += d * (1 - AIM_RADIUS / l)
-			d = t.fire_pos - t.fire_origin
-			l = AIM_RADIUS
-		}
-		if l > AIM_DRAG {
-			t.aiming = true
-		}
-		if t.aiming && l > 2 {
-			t.aim_dir = d / l
-		}
-		if t.aiming {
-			in_.aim_dir = t.aim_dir
-			in_.has_dir = true
-		}
-	} else {
-		t.aiming = false
-	}
 
 	// Menus have their own buttons (see `ui.odin`). Back on Android, or
 	// Escape with the mouse, pauses. Back arrives as a press and a release in
@@ -290,9 +225,11 @@ poll_touch :: proc(g: ^Game) -> Input {
 		// Keep the keyboard working while testing the touch layout on a desktop.
 		if rl.IsKeyDown(.A) {in_.move -= 1}
 		if rl.IsKeyDown(.D) {in_.move += 1}
+		if rl.IsKeyDown(.W) {in_.move_y -= 1}
+		if rl.IsKeyDown(.S) {in_.move_y += 1}
 		if rl.IsKeyPressed(.SPACE) {in_.jump = true}
 		if rl.IsKeyDown(.SPACE) {in_.jump_held = true}
-		if rl.IsKeyPressed(.E) {in_.interact = true}
+		if rl.IsKeyPressed(.LEFT_SHIFT) {in_.dash = true}
 		if rl.IsKeyPressed(.ENTER) {in_.confirm = true}
 		in_.nav = menu_nav()
 	}
@@ -313,62 +250,4 @@ menu_nav :: proc() -> int {
 @(private = "file")
 grow :: proc(r: rl.Rectangle, by: f32) -> rl.Rectangle {
 	return {r.x - by, r.y - by, r.width + by * 2, r.height + by * 2}
-}
-
-// The angle the gun should point when the player has not said where: the
-// nearest live creature in this room that the gun can actually see, or else
-// straight ahead.
-auto_aim :: proc(g: ^Game) -> (angle: f32, target: rl.Vector2, found: bool) {
-	p := &g.player
-	hand := player_hand(p^)
-	best_d := p.weapon.range
-	for e in g.enemies {
-		if !e.alive || room_coords(e.pos) != g.room {
-			continue
-		}
-		c := enemy_centre(e)
-		d := rl.Vector2Distance(hand, c)
-		if d >= best_d || !line_of_sight(&g.map_tiles, hand, c) {
-			continue
-		}
-		best_d = d
-		target = c
-		found = true
-	}
-	if found {
-		to := target - hand
-		return math.atan2(to.y, to.x), target, true
-	}
-	return p.flip ? math.PI : 0, {}, false
-}
-
-// Is there any rock between two points? Sampled every half tile, which is fine
-// for a gun that only fires at what is in the same room.
-line_of_sight :: proc(m: ^Tilemap, a, b: rl.Vector2) -> bool {
-	d := b - a
-	steps := int(rl.Vector2Length(d) / (TILE / 2)) + 1
-	for i in 1 ..< steps {
-		p := a + d * (f32(i) / f32(steps))
-		if is_blocking(tile_at(m, int(math.floor(p.x / TILE)), int(math.floor(p.y / TILE)))) {
-			return false
-		}
-	}
-	return true
-}
-
-// Is there a chest or a stall crate close enough to use? Decides whether the
-// interact button is on screen at all.
-interact_available :: proc(g: ^Game) -> bool {
-	if g.player.dead {
-		return false
-	}
-	if shop_slot_in_reach(g.shop, g.player) >= 0 {
-		return true
-	}
-	for c in g.chests {
-		if !c.taken && chest_in_reach(c, g.player) {
-			return true
-		}
-	}
-	return false
 }

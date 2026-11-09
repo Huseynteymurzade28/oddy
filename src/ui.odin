@@ -57,9 +57,9 @@ menu_panel :: proc(g: ^Game) -> rl.Rectangle {
 		return {(view.x - BUTTON_W - 24) / 2, 98, BUTTON_W + 24, 3 * BUTTON_H + 2 * BUTTON_GAP + 22}
 	case .Paused:
 		return {(view.x - BUTTON_W - 40) / 2, 46, BUTTON_W + 40, 156}
-	case .Dead, .Won:
-		w := min(f32(400), view.x - 16)
-		return {(view.x - w) / 2, 28, w, 184}
+	case .Cleared:
+		w := min(f32(360), view.x - 16)
+		return {(view.x - w) / 2, 36, w, 168}
 	case .Playing:
 	}
 	return {}
@@ -98,16 +98,16 @@ menu_items :: proc(g: ^Game) -> []Menu_Item {
 			panel.y + 52,
 			{
 				{label = "RESUME", colour = .Green, action = .Resume},
-				{label = "NEW RUN", colour = .Yellow, action = .Restart},
+				{label = "RESTART", colour = .Yellow, action = .Restart},
 				{label = "MENU", colour = .Blue, action = .Menu},
 			},
 		)
-	case .Dead, .Won:
+	case .Cleared:
 		// Side by side along the bottom of the board.
 		w: f32 = min(BUTTON_W, (panel.width - 30) / 2)
 		y := panel.y + panel.height - BUTTON_H - 12
 		cx := panel.x + panel.width / 2
-		append(&items, Menu_Item{label = "RETRY", colour = .Green, action = .Restart, rect = {cx - w - 5, y, w, BUTTON_H}})
+		append(&items, Menu_Item{label = "AGAIN", colour = .Green, action = .Restart, rect = {cx - w - 5, y, w, BUTTON_H}})
 		append(&items, Menu_Item{label = "MENU", colour = .Blue, action = .Menu, rect = {cx + 5, y, w, BUTTON_H}})
 	case .Playing:
 	}
@@ -129,8 +129,8 @@ item_under :: proc(items: []Menu_Item, p: rl.Vector2) -> int {
 	return -1
 }
 
-// Menus wait a moment before taking a press, so the shot that ended a run
-// cannot also skip past the card that says so.
+// Menus wait a moment before taking a press, so the jump that finished a
+// level cannot also skip past the card that says so.
 MENU_DELAY :: 0.5
 
 menu_update :: proc(g: ^Game) {
@@ -193,7 +193,10 @@ activate :: proc(g: ^Game, action: Menu_Action) {
 	play(&g.assets, .Coin)
 	switch action {
 	case .None:
-	case .Play, .Resume:
+	case .Play:
+		level_restart(g)
+		game_set_state(g, .Playing)
+	case .Resume:
 		game_set_state(g, .Playing)
 	case .How_To:
 		g.ui.how_to = true
@@ -202,9 +205,10 @@ activate :: proc(g: ^Game, action: Menu_Action) {
 		g.ui.how_to = false
 		g.ui.focus = 1
 	case .Restart:
-		game_new_run(g)
+		level_restart(g)
+		game_set_state(g, .Playing)
 	case .Menu:
-		game_new_run(g)
+		level_restart(g)
 		game_set_state(g, .Title)
 	case .Quit:
 		g.quit = true

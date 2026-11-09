@@ -2,8 +2,7 @@
 
 The art, fonts and audio under `assets/` come from third-party packs and are not
 this project's work. Files have been renamed and pruned to match the code layout;
-the pixels are unchanged, except for `sprites/bullets/*.png`, which are the loose
-frames of the original bullet pack packed into one strip each.
+the pixels are unchanged.
 
 | Folder | Pack | Author | Licence |
 |---|---|---|---|
@@ -21,8 +20,6 @@ pack's terrain sheet into the 6x6 blocks `tilemap.odin` reads.
 | Folder | Pack | Author | Licence |
 |---|---|---|---|
 | `sprites/tileset.png` rows 0-11 (the water), `sprites/objects/` (except the flag), `sprites/background/` | | | |
-| `sprites/bullets/` | | | |
-| `sprites/weapons.png` | | | |
 | `sounds/`, `music/` | | | |
 | `fonts/pixel_operator_bold.ttf` | PixelOperator | Jayvee Enaguas (HarvettFox96) | CC0 |
 | `ui/` (menu buttons and boards) | [Pixel UI pack](https://opengameart.org/content/pixel-ui-pack-750-assets) | Kenney (kenney.nl) | CC0 — `ui/LICENSE_kenney_pixel_ui.txt` |
@@ -34,6 +31,6 @@ pack's terrain sheet into the 6x6 blocks `tilemap.odin` reads.
   that folder are Odin's `vendor:raylib` bindings (Odin is BSD-3-Clause), copied
   with only the library paths changed.
 - The torches, roots, stalactites, crystals, mushrooms, drifting motes, the
-  lighting, sun shafts, the aim line, the touch controls and the Android
+  lighting, sun shafts, the spikes, the touch controls and the Android
   launcher icon (Virtual Guy on a drawn sky) are drawn in code for this
   project; no third-party art was added for them.

@@ -11,27 +11,27 @@ whatever it falls across. Each zone gets one thing:
   Drowned  a soft blue shimmer that rises off the floor and wavers
   Ember    a hot glow welling up from below
 
-All of it is placed from the room's grid position, so a room looks the same
-every time you walk back into it.
+The level is cut into screen-sized chunks and each one places its light from
+its own grid position, so a stretch of level looks the same every time you
+come back to it.
 */
+
+CHUNK_W :: 32 // tiles
+CHUNK_H :: 18
 
 atmosphere_draw :: proc(g: ^Game, view: rl.Rectangle) {
 	rl.BeginBlendMode(.ADDITIVE)
 	defer rl.EndBlendMode()
 
-	// The room you are in and its neighbours, which is all the camera can see.
-	for dy in -1 ..= 1 {
-		for dx in -1 ..= 1 {
-			cell := g.room + {dx, dy}
-			room := room_at(&g.world, cell.x, cell.y)
-			if room == nil || room.role == .Unused {
-				continue
-			}
-			bounds := room_rect(cell)
-			if !rl.CheckCollisionRecs(bounds, view) {
-				continue
-			}
-			switch room.zone {
+	cw: f32 = CHUNK_W * TILE
+	ch: f32 = CHUNK_H * TILE
+	x0 := int(view.x / cw)
+	y0 := int(view.y / ch)
+	for cy in y0 ..= int((view.y + view.height) / ch) {
+		for cx in x0 ..= int((view.x + view.width) / cw) {
+			cell := [2]int{cx, cy}
+			bounds := rl.Rectangle{f32(cx) * cw, f32(cy) * ch, cw, ch}
+			switch g.level.zone {
 			case .Mossy:
 				sun_shafts(g, cell, bounds)
 			case .Drowned:

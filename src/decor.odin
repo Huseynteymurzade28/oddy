@@ -69,128 +69,115 @@ open :: proc(m: ^Tilemap, x, y: int) -> bool {
 	return tile_at(m, x, y) == .Empty
 }
 
-// Rolls the decorations for every room. Runs after the terrain and the doors
-// are final, so nothing hangs in a doorway.
+// Rolls the decorations for the whole level, after its tiles are final. The
+// roll is seeded from the level's size, so the same level always grows the
+// same moss.
 decor_scatter :: proc(g: ^Game) {
 	clear(&g.decor)
 	clear(&g.liquid_glows)
 	m := &g.map_tiles
+	zone := g.level.zone
+	look := ZONE_LOOKS[zone]
 
-	for ry in 0 ..< GRID_H {
-		for rx in 0 ..< GRID_W {
-			room := g.world.rooms[ry][rx]
-			if room.role == .Unused {
+	state := rand.create(u64(m.width * 7919 + m.height))
+	context.random_generator = rand.default_random_generator(&state)
+
+	torches := make([dynamic]rl.Vector2, context.temp_allocator)
+	for ty in 1 ..< m.height - 1 {
+		for tx in 1 ..< m.width - 1 {
+			if !open(m, tx, ty) {
 				continue
 			}
-			look := ZONE_LOOKS[room.zone]
-			ox, oy := rx * ROOM_W, ry * ROOM_H
-			torches := make([dynamic]rl.Vector2, context.temp_allocator)
-			torch_budget := 2 + rand.int_max(2)
-			if room.role == .Boss {
-				torch_budget = 4
+			px := f32(tx) * TILE
+			py := f32(ty) * TILE
+
+			// Lava gives off light along its surface.
+			if zone == .Ember && tile_at(m, tx, ty + 1) == .Water && tx % 3 == 0 {
+				append(&g.liquid_glows, rl.Vector2{px + TILE / 2, py + TILE})
 			}
 
-			for y in 1 ..< ROOM_H - 1 {
-				for x in 1 ..< ROOM_W - 1 {
-					tx, ty := ox + x, oy + y
-					if !open(m, tx, ty) {
-						continue
+			// Hanging from a ceiling.
+			if solid(m, tx, ty - 1) && open(m, tx, ty + 1) {
+				switch zone {
+				case .Mossy:
+					if rand.float32() < 0.22 {
+						append(&g.decor, Decor {
+							kind   = .Root,
+							pos    = {px + rand.float32_range(3, 13), py},
+							length = rand.float32_range(8, 34),
+							phase  = rand.float32_range(0, math.TAU),
+							tint   = {64, 92, 54, 255},
+						})
 					}
-					px := f32(tx) * TILE
-					py := f32(ty) * TILE
+				case .Drowned, .Ember:
+					if rand.float32() < 0.2 {
+						tint := mul_color({120, 112, 128, 255}, look.rock)
+						append(&g.decor, Decor {
+							kind   = .Stalactite,
+							pos    = {px + rand.float32_range(4, 12), py},
+							length = rand.float32_range(6, 18),
+							phase  = rand.float32_range(0, math.TAU),
+							tint   = tint,
+						})
+					}
+				}
+			}
 
-					// Lava gives off light along its surface.
-					if room.zone == .Ember && tile_at(m, tx, ty + 1) == .Water && x % 3 == 0 {
-						append(&g.liquid_glows, rl.Vector2{px + TILE / 2, py + TILE})
+			// Standing on a floor.
+			if solid(m, tx, ty + 1) {
+				switch zone {
+				case .Mossy:
+					if rand.float32() < 0.05 {
+						append(&g.decor, Decor {
+							kind   = .Mushroom,
+							pos    = {px + rand.float32_range(3, 13), py + TILE},
+							phase  = rand.float32_range(0, math.TAU),
+							tint   = {120, 240, 220, 255},
+							light  = {60, 130, 120, 255},
+							radius = 22,
+						})
 					}
+				case .Drowned, .Ember:
+					if rand.float32() < 0.06 {
+						append(&g.decor, Decor {
+							kind   = .Crystal,
+							pos    = {px + rand.float32_range(4, 12), py + TILE},
+							length = rand.float32_range(6, 12),
+							phase  = rand.float32_range(0, math.TAU),
+							tint   = look.accent,
+							light  = mul_color(look.accent, {140, 140, 140, 255}),
+							radius = 40,
+						})
+					}
+				}
+			}
 
-					// Hanging from a ceiling.
-					if solid(m, tx, ty - 1) && open(m, tx, ty + 1) {
-						switch room.zone {
-						case .Mossy:
-							if rand.float32() < 0.22 {
-								append(&g.decor, Decor {
-									kind   = .Root,
-									pos    = {px + rand.float32_range(3, 13), py},
-									length = rand.float32_range(8, 34),
-									phase  = rand.float32_range(0, math.TAU),
-									tint   = {64, 92, 54, 255},
-								})
-							}
-						case .Drowned, .Ember:
-							if rand.float32() < 0.2 {
-								tint := mul_color({120, 112, 128, 255}, look.rock)
-								append(&g.decor, Decor {
-									kind   = .Stalactite,
-									pos    = {px + rand.float32_range(4, 12), py},
-									length = rand.float32_range(6, 18),
-									phase  = rand.float32_range(0, math.TAU),
-									tint   = tint,
-								})
-							}
-						}
+			// On a wall, with open air under it, and never two close together.
+			side: f32 = 0
+			if solid(m, tx - 1, ty) {
+				side = -1
+			} else if solid(m, tx + 1, ty) {
+				side = 1
+			}
+			if side != 0 && open(m, tx, ty + 1) && open(m, tx, ty - 1) && rand.float32() < 0.08 {
+				pos := rl.Vector2{px + TILE / 2 + side * 5, py + 6}
+				crowded := false
+				for t in torches {
+					if rl.Vector2Distance(t, pos) < TILE * 9 {
+						crowded = true
 					}
-
-					// Standing on a floor.
-					if solid(m, tx, ty + 1) && room.role != .Boss && room.role != .Shop {
-						switch room.zone {
-						case .Mossy:
-							if rand.float32() < 0.05 {
-								append(&g.decor, Decor {
-									kind   = .Mushroom,
-									pos    = {px + rand.float32_range(3, 13), py + TILE},
-									phase  = rand.float32_range(0, math.TAU),
-									tint   = {120, 240, 220, 255},
-									light  = {60, 130, 120, 255},
-									radius = 22,
-								})
-							}
-						case .Drowned, .Ember:
-							if rand.float32() < 0.06 {
-								append(&g.decor, Decor {
-									kind   = .Crystal,
-									pos    = {px + rand.float32_range(4, 12), py + TILE},
-									length = rand.float32_range(6, 12),
-									phase  = rand.float32_range(0, math.TAU),
-									tint   = look.accent,
-									light  = mul_color(look.accent, {140, 140, 140, 255}),
-									radius = 40,
-								})
-							}
-						}
-					}
-
-					// On a wall, at about head height above something to stand on.
-					if torch_budget > 0 && y >= 3 && y <= ROOM_H - 6 {
-						side: f32 = 0
-						if solid(m, tx - 1, ty) {
-							side = -1
-						} else if solid(m, tx + 1, ty) {
-							side = 1
-						}
-						if side != 0 && open(m, tx, ty + 1) && rand.float32() < 0.08 {
-							pos := rl.Vector2{px + TILE / 2 + side * 5, py + 6}
-							crowded := false
-							for t in torches {
-								if rl.Vector2Distance(t, pos) < TILE * 7 {
-									crowded = true
-								}
-							}
-							if !crowded {
-								append(&torches, pos)
-								torch_budget -= 1
-								append(&g.decor, Decor {
-									kind   = .Torch,
-									pos    = pos,
-									side   = side,
-									phase  = rand.float32_range(0, math.TAU),
-									tint   = look.accent,
-									light  = mul_color(look.accent, {220, 210, 200, 255}),
-									radius = 84,
-								})
-							}
-						}
-					}
+				}
+				if !crowded {
+					append(&torches, pos)
+					append(&g.decor, Decor {
+						kind   = .Torch,
+						pos    = pos,
+						side   = side,
+						phase  = rand.float32_range(0, math.TAU),
+						tint   = look.accent,
+						light  = mul_color(look.accent, {220, 210, 200, 255}),
+						radius = 84,
+					})
 				}
 			}
 		}
@@ -208,7 +195,7 @@ spawn_mote :: proc(g: ^Game, m: Mote) {
 
 motes_update :: proc(g: ^Game, dt: f32) {
 	view := camera_view(g)
-	zone := zone_at(&g.world, g.player.pos)
+	zone := g.level.zone
 	look := ZONE_LOOKS[zone]
 	random_in_view :: proc(view: rl.Rectangle) -> rl.Vector2 {
 		return {

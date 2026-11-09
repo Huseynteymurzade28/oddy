@@ -1,12 +1,11 @@
 package game
 
-import "core:math"
 import rl "../libs/raylib"
 
 /*
 The on-screen controls for a touch screen. Each one is a soft, coloured disc
 with a white icon, so they read at a glance without reading a word: green to
-jump, orange to shoot, gold to use. They sink a little and light up under a
+jump, blue to dash. They sink a little and light up under a
 thumb. Positions come from `input.odin`, which reads the touches against the
 same numbers.
 */
@@ -14,9 +13,7 @@ same numbers.
 @(private = "file")
 JUMP_COLOUR :: rl.Color{86, 206, 140, 255}
 @(private = "file")
-FIRE_COLOUR :: rl.Color{255, 128, 82, 255}
-@(private = "file")
-USE_COLOUR :: rl.Color{255, 198, 76, 255}
+DASH_COLOUR :: rl.Color{110, 170, 255, 255}
 @(private = "file")
 STICK_COLOUR :: rl.Color{150, 170, 255, 255}
 @(private = "file")
@@ -40,25 +37,13 @@ draw_touch_controls :: proc(g: ^Game) {
 			knob += d
 		}
 		draw_knob(knob, 12, STICK_COLOUR, held)
-		// Little arrows on the pad say which way it goes.
+		// Little arrows on the pad: it goes every way.
 		a := rl.Color{255, 255, 255, held ? 120 : 80}
-		for side in ([2]f32{-1, 1}) {
-			tip := base + {side * (STICK_RADIUS + 1), 0}
-			tri(tip * s, (tip + {-side * 4, 3.5}) * s, (tip + {-side * 4, -3.5}) * s, a)
+		for d in ([4]rl.Vector2{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+			tip := base + d * (STICK_RADIUS + 1)
+			side := rl.Vector2{-d.y, d.x}
+			tri(tip * s, (tip - d * 4 + side * 3.5) * s, (tip - d * 4 - side * 3.5) * s, a)
 		}
-	}
-
-	// --- aim stick: the gun goes where it is dragged ---------------------------
-	{
-		held := t.fire_id != NO_TOUCH
-		base := held ? t.fire_origin : fire_button_pos()
-		draw_pad(base, AIM_RADIUS + 6, FIRE_COLOUR, held)
-		knob := base
-		if held && t.aiming {
-			knob += t.aim_dir * min(rl.Vector2Length(t.fire_pos - t.fire_origin), AIM_RADIUS)
-		}
-		draw_knob(knob, 14, FIRE_COLOUR, held)
-		draw_crosshair_icon(knob, held)
 	}
 
 	// --- jump ------------------------------------------------------------------
@@ -78,18 +63,20 @@ draw_touch_controls :: proc(g: ^Game) {
 		}
 	}
 
-	// --- use: only while something is in reach, and pulsing ------------------
-	if interact_available(g) {
-		held := t.interact_id != NO_TOUCH
-		c := interact_button_pos()
-		pulse := 0.5 + 0.5 * math.sin(g.time * 6)
-		ring(c, INTERACT_RADIUS + 3 + pulse * 3, 1.5, {255, 214, 110, u8(40 + pulse * 120)})
-		r := draw_button(c, INTERACT_RADIUS, USE_COLOUR, held)
-		k := r / INTERACT_RADIUS
-		// An open hand is a lot of pixels; a pointing hand reads as "touch".
-		fill_rect(c.x - 2 * k, c.y - 9 * k, 4 * k, 11 * k, ICON)
-		fill_rect(c.x - 6 * k, c.y - 1 * k, 12 * k, 8 * k, ICON)
-		fill_rect(c.x - 7 * k, c.y + 1 * k, 2 * k, 4 * k, ICON)
+	// --- dash: dimmer while it is spent ---------------------------------------
+	{
+		held := t.dash_id != NO_TOUCH
+		c := dash_button_pos()
+		idle: u8 = g.player.dashes > 0 ? 150 : 70
+		r := draw_button(c, DASH_RADIUS, DASH_COLOUR, held, idle)
+		k := r / DASH_RADIUS
+		// Two chevrons: a burst forward.
+		w := 2.2 * k * s
+		for i in 0 ..< 2 {
+			x := c.x + (f32(i) * 6 - 4) * k
+			rl.DrawLineEx({x - 3 * k, c.y - 6 * k} * s, {x + 3 * k, c.y} * s, w, ICON)
+			rl.DrawLineEx({x + 3 * k, c.y} * s, {x - 3 * k, c.y + 6 * k} * s, w, ICON)
+		}
 	}
 }
 
@@ -122,17 +109,4 @@ draw_pad :: proc(c: rl.Vector2, r: f32, colour: rl.Color, held: bool) {
 @(private = "file")
 draw_knob :: proc(c: rl.Vector2, r: f32, colour: rl.Color, held: bool) {
 	draw_button(c, r, colour, held, 105)
-}
-
-@(private = "file")
-draw_crosshair_icon :: proc(c: rl.Vector2, held: bool) {
-	col := ICON
-	ring(c, 6, 1.5, col)
-	fill_rect(c.x - 10, c.y - 0.75, 5, 1.5, col)
-	fill_rect(c.x + 5, c.y - 0.75, 5, 1.5, col)
-	fill_rect(c.x - 0.75, c.y - 10, 1.5, 5, col)
-	fill_rect(c.x - 0.75, c.y + 5, 1.5, 5, col)
-	if held {
-		fill_circle(c, 1.5, col)
-	}
 }

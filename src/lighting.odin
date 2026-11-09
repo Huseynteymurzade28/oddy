@@ -11,8 +11,7 @@ render target the size of the virtual screen, cleared to the zone's ambient
 colour and with every light added on top as a soft circle. Where lights pile up
 the map saturates to white and the art shows as painted; everywhere else it
 sinks toward the ambient tint. That one multiply is what gives the zones their
-colour, makes a torch read as a torch, and lets a bullet light the wall it is
-about to hit.
+colour, makes a torch read as a torch, and lets a lit checkpoint stand out in the dark.
 
 The map is a quarter of a megapixel at most and the lights are a few dozen
 gradient circles, so this is cheap enough for a phone.
@@ -21,7 +20,7 @@ gradient circles, so this is cheap enough for a phone.
 Lighting :: struct {
 	target:  rl.RenderTexture2D,
 	size:    [2]i32,
-	ambient: rl.Color, // eased toward the current room's, so a doorway fades
+	ambient: rl.Color, // eased toward the level's, so a change fades in
 }
 
 lighting_destroy :: proc(l: ^Lighting) {
@@ -38,12 +37,7 @@ light :: proc(pos: rl.Vector2, radius: f32, colour: rl.Color) {
 }
 
 lighting_update :: proc(g: ^Game, dt: f32) {
-	want := ZONE_LOOKS[zone_at(&g.world, g.player.pos)].ambient
-	room := room_at(&g.world, g.room.x, g.room.y)
-	if room != nil && room.role == .Start {
-		// The way in still has daylight coming down it.
-		want = {255, 255, 248, 255}
-	}
+	want := ZONE_LOOKS[g.level.zone].ambient
 	if g.lighting.ambient.a == 0 {
 		g.lighting.ambient = want
 	}
@@ -129,19 +123,6 @@ gather_lights :: proc(g: ^Game) {
 		}
 	}
 
-	for b in g.bullets {
-		if b.delay > 0 || !near(view, b.pos, 40) {
-			continue
-		}
-		c := b.tint
-		c.a = 255
-		light(b.pos, b.from_player ? 26 : 30, mul_color(c, {170, 170, 170, 255}))
-	}
-	for e in g.effects {
-		if near(view, e.pos, 40) {
-			light(e.pos, 34, {200, 170, 120, 255})
-		}
-	}
 	for s in g.sparks {
 		if s.size >= 1.8 && near(view, s.pos, 20) {
 			c := s.tint
@@ -156,57 +137,11 @@ gather_lights :: proc(g: ^Game) {
 		}
 	}
 
-	for p in g.pickups {
-		if p.taken || !near(view, p.pos, 40) {
-			continue
-		}
-		switch p.kind {
-		case .Key:
-			light(p.pos, 48, {255, 210, 120, 255})
-		case .Rune:
-			light(p.pos, 34, {120, 230, 140, 255})
-		case .Coin:
-			light(p.pos, 14, {120, 100, 50, 255})
+	// Checkpoints glow once they are lit, and the flag at the end always does.
+	for c in g.level.checkpoints {
+		if c.active && near(view, c.pos, 60) {
+			light(c.pos - {0, 20}, 54, {170, 160, 120, 255})
 		}
 	}
-	for c in g.chests {
-		if c.opened && !c.taken {
-			col := RARITY_COLORS[c.loot.rarity]
-			light(chest_loot_pos(c), 46, mul_color(col, {200, 200, 200, 255}))
-		} else if !c.opened {
-			light(c.pos - {0, 8}, 26, {120, 100, 60, 255})
-		}
-	}
-	if g.shop.open {
-		light(g.shop.pos - {0, 30}, 80, {200, 170, 120, 255})
-	}
-	light(g.flag_pos - {0, 20}, 60, {170, 160, 120, 255})
-
-	// The bosses glow with their own colour, brighter as they wind up.
-	for e in g.enemies {
-		if !e.alive || !is_boss(e.kind) {
-			continue
-		}
-		c := TRAITS[e.kind].tint
-		r: f32 = 70
-		if e.act == .Wind_Up {
-			c = {255, 110, 90, 255}
-			r = 90
-		}
-		light(enemy_centre(e), r, mul_color(c, {150, 150, 150, 255}))
-	}
-
-	// A sealed door burns.
-	for gate in g.world.gates {
-		p := rl.Vector2{f32(gate.x) * TILE + TILE / 2, f32(gate.y) * TILE + TILE / 2}
-		if near(view, p, 30) {
-			light(p, 30, {150, 110, 50, 255})
-		}
-	}
-	if g.boss_sealed && !g.boss_down {
-		for gate in g.world.boss_doors {
-			p := rl.Vector2{f32(gate.x) * TILE + TILE / 2, f32(gate.y) * TILE + TILE / 2}
-			light(p, 30, {170, 70, 50, 255})
-		}
-	}
+	light(g.level.exit - {0, 20}, 70, {200, 170, 100, 255})
 }

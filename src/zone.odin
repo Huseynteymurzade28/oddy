@@ -3,8 +3,8 @@ package game
 import rl "../libs/raylib"
 
 /*
-How the Hollow changes as it goes down. Every room belongs to one of three
-zones, picked from how far it is from the start, and a zone is mostly a mood:
+How the Hollow changes as it goes down. Every level belongs to one of three
+zones (the three worlds), and a zone is mostly a mood:
 how dark it is and what colour the dark is, how the rock is tinted, what
 drifts through the air, and what grows on the walls.
 
@@ -12,7 +12,7 @@ drifts through the air, and what grows on the walls.
            and fireflies. The brightest of the three.
   Drowned  the flooded middle: cold blue rock, dripping ceilings, crystals.
   Ember    the deep. Red rock, rising embers, and the water there is not water
-           any more. The vault is always down here.
+           any more.
 */
 
 Zone :: enum u8 {
@@ -55,40 +55,6 @@ ZONE_LOOKS := [Zone]Zone_Look {
 		mote       = {255, 150, 70, 255},
 		accent     = {255, 120, 70, 255},
 	},
-}
-
-// Splits the run into thirds by depth. The vault and the key are always in the
-// deep, so the last stretch of a run always feels like the last stretch.
-zone_for :: proc(role: Room_Role, depth, deepest: int) -> Zone {
-	#partial switch role {
-	case .Boss, .Key:
-		return .Ember
-	case .Start:
-		return .Mossy
-	}
-	switch {
-	case depth * 3 <= deepest:
-		return .Mossy
-	case depth * 3 <= deepest * 2:
-		return .Drowned
-	}
-	return .Ember
-}
-
-// The zone of whatever room a world position falls in.
-zone_at :: proc(w: ^World, pos: rl.Vector2) -> Zone {
-	cell := room_coords(pos)
-	if room := room_at(w, cell.x, cell.y); room != nil {
-		return room.zone
-	}
-	return .Mossy
-}
-
-zone_of_tile :: proc(w: ^World, tx, ty: int) -> Zone {
-	if room := room_at(w, tx / ROOM_W, ty / ROOM_H); room != nil {
-		return room.zone
-	}
-	return .Mossy
 }
 
 lerp_color :: proc(a, b: rl.Color, t: f32) -> rl.Color {

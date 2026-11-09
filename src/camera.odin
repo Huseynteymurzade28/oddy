@@ -5,18 +5,18 @@ import rl "../libs/raylib"
 
 /*
 Everything that decides what the screen shows: the fixed virtual resolution, the
-camera that follows the player one room at a time, and the layers drawn behind
+camera that follows the player around the level, and the layers drawn behind
 and over the world.
 
 The game is rendered at a fixed virtual height and scaled up to the window, so it
-always shows the same amount of world regardless of resolution. 240 tall is about
-fifteen tiles, enough of a room to see a flyer coming without shrinking the
-player into a dot.
+always shows the same amount of world regardless of resolution. 240 tall is
+fifteen tiles: enough to read the next jump without shrinking the player into
+a dot.
 */
 PIXEL_HEIGHT :: 240.0
 CAMERA_LOOKUP :: 14.0 // how far above the feet the camera aims
-CAMERA_SMOOTH :: 10.0
-AIM_LEAD :: 30.0 // how far the camera leans toward where you are aiming
+CAMERA_SMOOTH :: 8.0
+LOOK_AHEAD :: 24.0 // how far the camera leans the way you are facing
 
 // The size of the virtual screen in world units.
 view_size :: proc() -> rl.Vector2 {
@@ -31,42 +31,55 @@ camera_view :: proc(g: ^Game) -> rl.Rectangle {
 	return {g.camera.target.x - view.x / 2, g.camera.target.y - view.y / 2, view.x, view.y}
 }
 
-camera_update :: proc(g: ^Game, dt: f32) {
+// Where the camera wants to be: a little ahead of the player, never showing
+// anything past the edges of the level.
+@(private = "file")
+camera_goal :: proc(g: ^Game) -> rl.Vector2 {
+	p := g.player
+	ahead: f32 = p.flip ? -LOOK_AHEAD : LOOK_AHEAD
+	return p.pos - {0, CAMERA_LOOKUP} + {ahead, 0}
+}
+
+@(private = "file")
+camera_clamp :: proc(g: ^Game) {
+	view := view_size()
+	half := view / 2
+	bounds := tilemap_bounds(&g.map_tiles)
+	axis :: proc(v, half, size: f32) -> f32 {
+		if size <= half * 2 {
+			return size / 2
+		}
+		return clamp(v, half, size - half)
+	}
+	g.camera.target.x = axis(g.camera.target.x, half.x, bounds.x)
+	g.camera.target.y = axis(g.camera.target.y, half.y, bounds.y)
+}
+
+@(private = "file")
+camera_fit :: proc(g: ^Game) {
 	sw := f32(rl.GetScreenWidth())
 	sh := f32(rl.GetScreenHeight())
 	g.camera.zoom = sh / PIXEL_HEIGHT
 	g.camera.offset = {sw / 2, sh / 2}
+}
 
-	view := view_size()
-	half := view / 2
+// Jumps straight to the player: at the start of a level.
+camera_snap :: proc(g: ^Game) {
+	camera_fit(g)
+	g.camera.target = camera_goal(g)
+	camera_clamp(g)
+}
 
-	// Lean toward the crosshair, which buys a little more warning about what you
-	// are shooting at without letting the player leave the frame.
-	lead := rl.Vector2{math.cos(g.player.aim), math.sin(g.player.aim)} * AIM_LEAD
-	wanted := g.player.pos - {0, CAMERA_LOOKUP} + lead
+camera_update :: proc(g: ^Game, dt: f32) {
+	camera_fit(g)
+	wanted := camera_goal(g)
+	// A respawn far from where you died cuts rather than pans: the trip back
+	// is not worth watching for the hundredth time.
+	if rl.Vector2Distance(wanted, g.camera.target) > view_size().x {
+		g.camera.target = wanted
+	}
 	g.camera.target += (wanted - g.camera.target) * min(1, CAMERA_SMOOTH * dt)
-
-	// The camera stays inside the room the player is in: crossing a doorway is
-	// what moves it on, which is what makes the map read as separate places.
-	bounds := room_rect(g.room)
-	if bounds.width > view.x {
-		g.camera.target.x = clamp(
-			g.camera.target.x,
-			bounds.x + half.x,
-			bounds.x + bounds.width - half.x,
-		)
-	} else {
-		g.camera.target.x = bounds.x + bounds.width / 2
-	}
-	if bounds.height > view.y {
-		g.camera.target.y = clamp(
-			g.camera.target.y,
-			bounds.y + half.y,
-			bounds.y + bounds.height - half.y,
-		)
-	} else {
-		g.camera.target.y = bounds.y + bounds.height / 2
-	}
+	camera_clamp(g)
 }
 
 // Everything is underground, so the far edges of the view fall off into dark.
@@ -93,9 +106,8 @@ draw_background :: proc(g: ^Game) {
 	s := f32(rl.GetScreenHeight()) / PIXEL_HEIGHT
 	layer_w: f32 = PIXEL_HEIGHT * 16 / 9
 
-	// The forest behind the rock takes on the colour of the zone, easing over
-	// as you cross into a room of another one.
-	want := ZONE_LOOKS[zone_at(&g.world, g.player.pos)].background
+	// The forest behind the rock takes on the colour of the zone.
+	want := ZONE_LOOKS[g.level.zone].background
 	if g.bg_tint.a == 0 {
 		g.bg_tint = want
 	}

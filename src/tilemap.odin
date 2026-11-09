@@ -13,7 +13,7 @@ Tile :: enum u8 {
 	Moss, // overgrown rock, marks the surface of a room
 	Platform, // one-way: solid from above only
 	Water, // hazard, does not block movement
-	Gate, // seals the boss room; every gate tile clears when the key is taken
+	Spike, // hazard on the side it points to; see `spike_hitbox`
 }
 
 Tilemap :: struct {
@@ -31,13 +31,14 @@ tilemap_destroy :: proc(m: ^Tilemap) {
 	m^ = {}
 }
 
-// Outside the map the world is solid rock, except above it, so a jump that
-// overshoots the ceiling does not slam into an invisible wall.
+// Outside the map the sides are solid rock. Above and below it is open air:
+// a jump that overshoots the top does not hit an invisible ceiling, and a fall
+// out of the bottom is a death (see `player_update`).
 tile_at :: proc(m: ^Tilemap, x, y: int) -> Tile {
-	if y < 0 {
+	if y < 0 || y >= m.height {
 		return .Empty
 	}
-	if x < 0 || x >= m.width || y >= m.height {
+	if x < 0 || x >= m.width {
 		return .Deep
 	}
 	return m.tiles[y * m.width + x]
@@ -50,11 +51,7 @@ tile_set :: proc(m: ^Tilemap, x, y: int, t: Tile) {
 }
 
 is_blocking :: proc(t: Tile) -> bool {
-	return t == .Rock || t == .Deep || t == .Moss || t == .Gate
-}
-
-is_hazard :: proc(t: Tile) -> bool {
-	return t == .Water
+	return t == .Rock || t == .Deep || t == .Moss
 }
 
 tilemap_bounds :: proc(m: ^Tilemap) -> rl.Vector2 {
@@ -82,13 +79,54 @@ tilemap_overlaps_solid :: proc(m: ^Tilemap, r: rl.Rectangle) -> bool {
 	return false
 }
 
+// Which way a spike points: away from the rock it grows on. A spike with rock
+// on no side points up.
+spike_dir :: proc(m: ^Tilemap, x, y: int) -> [2]int {
+	switch {
+	case is_blocking(tile_at(m, x, y + 1)):
+		return {0, -1}
+	case is_blocking(tile_at(m, x, y - 1)):
+		return {0, 1}
+	case is_blocking(tile_at(m, x - 1, y)):
+		return {1, 0}
+	case is_blocking(tile_at(m, x + 1, y)):
+		return {-1, 0}
+	}
+	return {0, -1}
+}
+
+// Only the half of a spike tile against its rock hurts, and not quite all of
+// that: brushing the tips of a row of spikes is a near miss, not a death.
+SPIKE_DEPTH :: 7
+SPIKE_INSET :: 2
+
+spike_hitbox :: proc(m: ^Tilemap, x, y: int) -> rl.Rectangle {
+	ox, oy := f32(x) * TILE, f32(y) * TILE
+	switch spike_dir(m, x, y) {
+	case {0, 1}:
+		return {ox + SPIKE_INSET, oy, TILE - SPIKE_INSET * 2, SPIKE_DEPTH}
+	case {1, 0}:
+		return {ox, oy + SPIKE_INSET, SPIKE_DEPTH, TILE - SPIKE_INSET * 2}
+	case {-1, 0}:
+		return {ox + TILE - SPIKE_DEPTH, oy + SPIKE_INSET, SPIKE_DEPTH, TILE - SPIKE_INSET * 2}
+	}
+	return {ox + SPIKE_INSET, oy + TILE - SPIKE_DEPTH, TILE - SPIKE_INSET * 2, SPIKE_DEPTH}
+}
+
 // Hazards do not block movement, they just kill, so they are queried separately.
+// Water kills anywhere in its tile, spikes only in their hitbox.
 tilemap_touches_hazard :: proc(m: ^Tilemap, r: rl.Rectangle) -> bool {
 	x0, y0, x1, y1 := tile_range(r)
 	for ty in y0 ..= y1 {
 		for tx in x0 ..= x1 {
-			if is_hazard(tile_at(m, tx, ty)) {
+			switch tile_at(m, tx, ty) {
+			case .Water:
 				return true
+			case .Spike:
+				if rl.CheckCollisionRecs(r, spike_hitbox(m, tx, ty)) {
+					return true
+				}
+			case .Empty, .Rock, .Deep, .Moss, .Platform:
 			}
 		}
 	}
@@ -112,7 +150,6 @@ EARTH := [Zone]int {
 	.Drowned = 246,
 	.Ember   = 252,
 }
-MATERIAL_GATE :: 360 // red brick: a doorway walled up
 
 // The one-way platforms are a single strip: a left cap, four middles, a right cap.
 PLATFORM_LEFT :: 366
@@ -132,9 +169,7 @@ material_base :: proc(t: Tile, zone: Zone) -> int {
 	switch t {
 	case .Rock, .Deep, .Moss:
 		return EARTH[zone]
-	case .Gate:
-		return MATERIAL_GATE
-	case .Empty, .Platform, .Water:
+	case .Empty, .Platform, .Water, .Spike:
 	}
 	return -1
 }
@@ -211,8 +246,8 @@ platform_source :: proc(m: ^Tilemap, x, y: int) -> rl.Rectangle {
 	return tileset_source(PLATFORM_LEFT)
 }
 
-// Each tile is tinted by the zone of the room it is in, which is most of what
-// makes the deep look deep. Water in the deepest zone is drawn as lava.
+// Each tile is tinted by the level's zone, which is most of what makes the
+// deep look deep. Water in the deepest zone is drawn as lava.
 tilemap_draw :: proc(g: ^Game, view: rl.Rectangle) {
 	m := &g.map_tiles
 	a := &g.assets
@@ -230,7 +265,7 @@ tilemap_draw :: proc(g: ^Game, view: rl.Rectangle) {
 			}
 			dest := rl.Rectangle{f32(x) * TILE, f32(y) * TILE, TILE, TILE}
 			src: rl.Rectangle
-			zone := zone_of_tile(&g.world, x, y)
+			zone := g.level.zone
 			look := &ZONE_LOOKS[zone]
 			tint := look.rock
 			switch t {
@@ -239,15 +274,9 @@ tilemap_draw :: proc(g: ^Game, view: rl.Rectangle) {
 				tint = look.liquid
 			case .Platform:
 				src = platform_source(m, x, y)
-			case .Gate:
-				// A sealed door reads as bedrock lit from within, pulsing so it
-				// is obvious it is waiting on something.
-				src = solid_source(m, x, y, t, zone)
-				pulse := u8(180 + 60 * math.sin(time * 4 + f32(y)))
-				tint = {255, 210, pulse, 255}
-				if g.boss_sealed && !g.boss_down {
-					tint = {255, u8(110 + 40 * math.sin(time * 6 + f32(y))), 90, 255}
-				}
+			case .Spike:
+				draw_spike(m, x, y)
+				continue
 			case .Rock, .Deep, .Moss:
 				src = solid_source(m, x, y, t, zone)
 			case .Empty:
@@ -256,4 +285,34 @@ tilemap_draw :: proc(g: ^Game, view: rl.Rectangle) {
 			rl.DrawTexturePro(a.tileset, src, dest, {}, 0, tint)
 		}
 	}
+}
+
+// Spikes are drawn in code until the trap art arrives: three steel teeth on a
+// base plate, pointing away from their rock.
+@(private = "file")
+draw_spike :: proc(m: ^Tilemap, x, y: int) {
+	d := spike_dir(m, x, y)
+	dir := rl.Vector2{f32(d.x), f32(d.y)}
+	side := rl.Vector2{-dir.y, dir.x} // along the base
+	centre := rl.Vector2{f32(x) * TILE + TILE / 2, f32(y) * TILE + TILE / 2}
+	base := centre - dir * (TILE / 2)
+
+	steel := rl.Color{196, 204, 220, 255}
+	shade := rl.Color{104, 112, 134, 255}
+	plate := rl.Color{70, 66, 84, 255}
+	for i in 0 ..< 3 {
+		along := (f32(i) - 1) * (TILE / 3)
+		b := base + side * along
+		tip := b + dir * 9
+		l := b + side * (TILE / 6)
+		r := b - side * (TILE / 6)
+		tri(l, r, tip, steel)
+		tri(b, r, tip, shade) // one face in shadow, so the teeth read as 3D
+	}
+	// The base plate.
+	p0 := base - side * (TILE / 2)
+	p1 := base + side * (TILE / 2)
+	q := dir * 2
+	tri(p0, p1, p1 + q, plate)
+	tri(p0, p1 + q, p0 + q, plate)
 }

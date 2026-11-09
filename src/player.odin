@@ -11,33 +11,62 @@ GROUND_ACCEL :: 1500.0
 AIR_ACCEL :: 1000.0
 GROUND_FRICTION :: 1800.0
 AIR_FRICTION :: 400.0
+// Going faster than a run (after a dash or a super jump) bleeds off slowly in
+// the air, so momentum is something you can carry and use.
+AIR_OVERSPEED_DRAG :: 260.0
 GRAVITY :: 950.0
 FALL_GRAVITY :: 1.2 // gravity is a little stronger on the way down: jumps feel less floaty
+// Near the top of a held jump gravity halves, which gives the apex a moment of
+// hang time to line up a dash.
+APEX_GRAVITY :: 0.5
+APEX_WINDOW :: 40.0
 MAX_FALL :: 430.0
 
-// A jump clears 4.5 tiles and the second one almost 3 more, so a platform four
-// rows up is always one jump and the next room up is always two. The templates
-// are drawn to those numbers (see `world_templates.odin`).
+// A jump clears 4.5 tiles and about 6 across at a run.
 JUMP_VELOCITY :: 375.0
-DOUBLE_JUMP_VELOCITY :: 305.0
 JUMP_CUT :: 0.5 // fraction of upward speed kept when jump is released early
-MIN_JUMP_HOLD :: 0.12 // a tap shorter than this still gives a full-height jump
-COYOTE_TIME :: 0.12 // grace period for jumping after walking off a ledge
-JUMP_BUFFER :: 0.15 // how early a jump press still counts on landing
+MIN_JUMP_HOLD :: 0.08 // a tap shorter than this still gives a short hop, not nothing
+COYOTE_TIME :: 0.1 // grace period for jumping after walking off a ledge
+JUMP_BUFFER :: 0.12 // how early a jump press still counts on landing
 LEDGE_ASSIST :: 9 // pixels: a jump that ends just short of a ledge is lifted onto it
 CORNER_NUDGE :: 5 // pixels: a head that clips a corner slides past it instead
 
 WALL_SLIDE_SPEED :: 62.0
-WALL_JUMP_X :: 210.0
-WALL_JUMP_Y :: 330.0
-WALL_STICK_TIME :: 0.16 // how long a wall jump overrides the steering input
+WALL_JUMP_X :: 200.0
+WALL_JUMP_Y :: 340.0
+WALL_STICK_TIME :: 0.14 // how long a wall jump overrides the steering input
+WALL_JUMP_REACH :: 3 // pixels: a wall this close still counts for a wall jump
 
-INVULN_TIME :: 1.1
-DEATH_DELAY :: 1.4
-MAX_HEALTH :: 5
-// The shop can sell extra hearts, but only so many: past this the row of them
-// would run into the coin counter under it.
-HEALTH_CAP :: 8
+// The dash: a fixed burst in one of eight directions, with gravity switched
+// off for its length. One per time in the air, refilled by standing on
+// ground. It covers about four tiles on its own.
+DASH_SPEED :: 320.0
+DASH_TIME :: 0.15
+DASH_END_SPEED :: 180.0 // what is left of it afterwards
+DASH_BUFFER :: 0.1
+DASH_FREEZE :: 0.045 // the world stops for a beat when a dash starts
+DASH_REFILL_DELAY :: 0.05 // a dash along the floor does not refill itself at once
+
+// Jumping out of a dash that is touching the ground: a super jump from a
+// sideways dash, a lower and longer hyper from a diagonal one down.
+SUPER_X :: 260.0
+HYPER_X :: 320.0
+HYPER_Y_SCALE :: 0.55
+
+DEATH_TIME :: 0.5 // from the hit to being back at the checkpoint
+RESPAWN_TIME :: 0.3 // the pop of arriving back
+FALL_DEATH_MARGIN :: 32.0 // how far under the level counts as fallen out of it
+
+TRAIL_LEN :: 6
+TRAIL_GAP :: 0.025
+
+Afterimage :: struct {
+	pos:   rl.Vector2,
+	flip:  bool,
+	anim:  ^Anim,
+	frame: int,
+	life:  f32,
+}
 
 Player :: struct {
 	pos:          rl.Vector2, // at the feet, horizontally centred
@@ -48,38 +77,30 @@ Player :: struct {
 	jump_buffer:  f32,
 	holding_jump: bool,
 	jump_time:    f32, // since the last jump started
-	air_jumps:    int, // mid-air jumps still available
 	wall_dir:     f32, // which side the wall is on while sliding: -1, 0 or +1
 	wall_stick:   f32,
-	invuln:       f32,
-	health:       int,
-	max_health:   int, // starts at MAX_HEALTH; the shop can raise it
+
+	dashes:       int, // dashes left before touching ground again
+	dash_time:    f32, // > 0 while dashing
+	dash_dir:     rl.Vector2,
+	dash_buffer:  f32,
+	since_dash:   f32,
+	trail:        [TRAIL_LEN]Afterimage,
+	trail_timer:  f32,
+	flash:        f32, // the white flash when a dash comes back
+
 	dead:         bool,
 	death_timer:  f32,
+	respawn_time: f32,
 	anim:         Animator,
-
-	// combat
-	aim:          f32, // radians, world space
-	aim_hold:     f32, // a dragged aim outlives the thumb by this long
-	aim_target:   rl.Vector2, // what the gun picked by itself, if anything
-	has_target:   bool,
-	weapon:       Weapon,
-	fire_cd:      f32,
-	fire_rate:    f32, // a multiplier the shop can buy up, 1 by default
-
-	// run progress
-	has_key:      bool,
-	coins:        int,
-	kills:        int,
 }
 
 player_init :: proc(p: ^Player, spawn: rl.Vector2) {
 	p^ = Player {
-		pos        = spawn,
-		health     = MAX_HEALTH,
-		max_health = MAX_HEALTH,
-		fire_rate  = 1,
-		weapon     = weapon_starter(),
+		pos          = spawn,
+		dashes       = 1,
+		since_dash   = 1,
+		respawn_time = RESPAWN_TIME,
 	}
 }
 
@@ -91,14 +112,29 @@ player_centre :: proc(p: Player) -> rl.Vector2 {
 	return {p.pos.x, p.pos.y - PLAYER_H / 2}
 }
 
-// Where the gun is held, just in front of the chest.
-player_hand :: proc(p: Player) -> rl.Vector2 {
-	return {p.pos.x + (p.flip ? -2 : 2), p.pos.y - 13}
-}
-
 @(private = "file")
 approach :: proc(current, target, delta: f32) -> f32 {
 	return current < target ? min(current + delta, target) : max(current - delta, target)
+}
+
+// Snaps whatever the stick or the keys say to one of eight directions. With no
+// direction held, a dash goes the way you are facing.
+@(private = "file")
+dash_direction :: proc(p: ^Player, in_: Input) -> rl.Vector2 {
+	d := rl.Vector2{in_.move, in_.move_y}
+	if rl.Vector2Length(d) < 0.35 {
+		return {p.flip ? -1 : 1, 0}
+	}
+	angle := math.round(math.atan2(d.y, d.x) / (math.PI / 4)) * (math.PI / 4)
+	dir := rl.Vector2{math.cos(angle), math.sin(angle)}
+	// Rounding leaves tiny leftovers on the zero axis.
+	if abs(dir.x) < 0.01 {
+		dir.x = 0
+	}
+	if abs(dir.y) < 0.01 {
+		dir.y = 0
+	}
+	return dir
 }
 
 player_update :: proc(g: ^Game, dt: f32) {
@@ -106,132 +142,173 @@ player_update :: proc(g: ^Game, dt: f32) {
 	a := &g.assets
 	m := &g.map_tiles
 
+	trail_update(p, dt)
+	p.flash = max(0, p.flash - dt)
+
 	if p.dead {
 		p.death_timer -= dt
-		animator_update(&p.anim, dt)
+		if p.death_timer <= 0 {
+			player_respawn(g)
+		}
 		return
 	}
+	p.respawn_time = max(0, p.respawn_time - dt)
 
-	p.invuln = max(0, p.invuln - dt)
-	p.fire_cd = max(0, p.fire_cd - dt)
-	p.wall_stick = max(0, p.wall_stick - dt)
-
-	// --- input ---------------------------------------------------------------
 	in_ := g.input
 	move := in_.move
-	down := in_.down
-	jump_pressed := in_.jump
-	jump_held := in_.jump_held
-
-	// --- aim -----------------------------------------------------------------
-	// A mouse points at the world. A thumb either drags a direction or leaves
-	// the gun to find its own target; with no thumb on the trigger at all, the
-	// gun just faces the way you are walking.
-	p.aim_hold = max(0, p.aim_hold - dt)
-	p.has_target = false
-	switch {
-	case in_.has_point:
-		to_target := in_.aim_point - player_hand(p^)
-		if rl.Vector2LengthSqr(to_target) > 0.01 {
-			p.aim = math.atan2(to_target.y, to_target.x)
-		}
-	case in_.has_dir:
-		p.aim = math.atan2(in_.aim_dir.y, in_.aim_dir.x)
-		p.aim_hold = 0.5
-	case in_.fire:
-		p.aim, p.aim_target, p.has_target = auto_aim(g)
-	case move != 0 && p.aim_hold <= 0:
-		p.aim = move < 0 ? math.PI : 0
+	if abs(move) < 0.2 {
+		move = 0
+	} else {
+		move = math.sign(move)
 	}
-	p.flip = math.cos(p.aim) < 0
 
-	if jump_pressed {
+	p.wall_stick = max(0, p.wall_stick - dt)
+	p.since_dash += dt
+	if in_.jump {
 		p.jump_buffer = JUMP_BUFFER
 	}
+	if in_.dash {
+		p.dash_buffer = DASH_BUFFER
+	}
 	p.jump_buffer = max(0, p.jump_buffer - dt)
+	p.dash_buffer = max(0, p.dash_buffer - dt)
 	p.coyote = max(0, p.coyote - dt)
 	p.jump_time += dt
+
+	if move != 0 && p.dash_time <= 0 && p.wall_stick <= 0 {
+		p.flip = move < 0
+	}
+
+	r := player_rect(p^)
+
+	// --- dash ----------------------------------------------------------------
+	if p.dash_buffer > 0 && p.dashes > 0 && p.dash_time <= 0 {
+		p.dash_buffer = 0
+		p.dashes -= 1
+		p.dash_dir = dash_direction(p, in_)
+		p.dash_time = DASH_TIME
+		p.since_dash = 0
+		p.vel = p.dash_dir * DASH_SPEED
+		p.holding_jump = false
+		p.wall_stick = 0
+		if p.dash_dir.x != 0 {
+			p.flip = p.dash_dir.x < 0
+		}
+		g.freeze = DASH_FREEZE
+		g.shake = max(g.shake, 2.5)
+		spawn_burst(g, player_centre(p^), {200, 230, 255, 255}, 8, 90, 1.0)
+		animator_restart(&p.anim, &a.player.double_jump)
+		play(a, .Dash)
+	}
+
+	dashing := p.dash_time > 0
+	if dashing {
+		p.dash_time -= dt
+		p.vel = p.dash_dir * DASH_SPEED
+		if p.dash_time <= 0 {
+			// Most of the speed goes when the dash ends; an upward dash keeps
+			// less of its lift so it cannot be chained into a flight.
+			p.vel = p.dash_dir * DASH_END_SPEED
+			if p.dash_dir.y < 0 {
+				p.vel.y *= 0.75
+			}
+		}
+		p.trail_timer -= dt
+		if p.trail_timer <= 0 {
+			p.trail_timer = TRAIL_GAP
+			trail_push(p)
+		}
+	}
 
 	// --- horizontal ----------------------------------------------------------
 	// A wall jump owns the horizontal velocity briefly; without that, holding
 	// the stick back into the wall would cancel the push immediately.
-	if p.wall_stick <= 0 {
-		if move != 0 {
+	if !dashing && p.wall_stick <= 0 {
+		target := move * RUN_SPEED
+		switch {
+		case !p.grounded && abs(p.vel.x) > RUN_SPEED && math.sign(p.vel.x) == move:
+			p.vel.x = approach(p.vel.x, target, AIR_OVERSPEED_DRAG * dt)
+		case move != 0:
 			accel: f32 = p.grounded ? GROUND_ACCEL : AIR_ACCEL
-			p.vel.x = approach(p.vel.x, move * RUN_SPEED, accel * dt)
-		} else {
+			p.vel.x = approach(p.vel.x, target, accel * dt)
+		case:
 			friction: f32 = p.grounded ? GROUND_FRICTION : AIR_FRICTION
 			p.vel.x = approach(p.vel.x, 0, friction * dt)
 		}
 	}
 
 	// --- walls ---------------------------------------------------------------
-	r := player_rect(p^)
 	touching := wall_side(m, r)
-	sliding := !p.grounded && p.vel.y > 0 && touching != 0 && move == touching
+	sliding := !dashing && !p.grounded && p.vel.y > 0 && touching != 0 && move == touching
 	p.wall_dir = sliding ? touching : 0
 
 	// --- jumping -------------------------------------------------------------
 	if p.jump_buffer > 0 {
+		near_wall := wall_side(m, grow_x(r, WALL_JUMP_REACH))
 		switch {
-		case p.grounded || p.coyote > 0:
-			p.vel.y = -JUMP_VELOCITY
-			p.grounded = false
-			p.coyote = 0
-			p.jump_buffer = 0
-			p.holding_jump = true
-			p.jump_time = 0
-			p.air_jumps = 1
+		case dashing && (p.grounded || p.coyote > 0) && p.dash_dir.y >= 0 && p.dash_dir.x != 0:
+			// Super (sideways dash) or hyper (diagonal down): the dash turns
+			// into a long, fast jump and gives the dash straight back.
+			p.dash_time = 0
+			dashing = false
+			p.vel.x = p.dash_dir.x * (p.dash_dir.y > 0 ? HYPER_X : SUPER_X)
+			p.vel.y = -JUMP_VELOCITY * (p.dash_dir.y > 0 ? HYPER_Y_SCALE : 1)
+			start_jump(p)
+			p.dashes = 1
+			spawn_burst(g, p.pos, {230, 240, 255, 255}, 6, 80, 1.0)
 			play(a, .Jump)
-		case p.wall_dir != 0:
-			p.vel = {-p.wall_dir * WALL_JUMP_X, -WALL_JUMP_Y}
+		case !dashing && (p.grounded || p.coyote > 0):
+			p.vel.y = -JUMP_VELOCITY
+			start_jump(p)
+			spawn_burst(g, p.pos, {200, 220, 190, 255}, 4, 50, 0.8)
+			play(a, .Jump)
+		case near_wall != 0 && !p.grounded:
+			// A wall jump cancels a dash that is still running, so you can
+			// dash into a wall and kick straight off it.
+			p.dash_time = 0
+			dashing = false
+			p.vel = {-near_wall * WALL_JUMP_X, -WALL_JUMP_Y}
 			p.wall_stick = WALL_STICK_TIME
 			p.wall_dir = 0
-			p.jump_buffer = 0
-			p.holding_jump = true
-			p.jump_time = 0
-			p.air_jumps = 1
-			animator_restart(&p.anim, &a.player.double_jump)
-			play(a, .Jump)
-		case p.air_jumps > 0:
-			p.air_jumps -= 1
-			p.vel.y = -DOUBLE_JUMP_VELOCITY
-			p.jump_buffer = 0
-			p.holding_jump = true
-			p.jump_time = 0
-			animator_restart(&p.anim, &a.player.double_jump)
+			p.flip = near_wall > 0
+			start_jump(p)
+			spawn_burst(g, {p.pos.x + near_wall * PLAYER_W / 2, p.pos.y - PLAYER_H / 2}, {200, 220, 190, 255}, 4, 50, 0.8)
 			play(a, .Jump)
 		}
 	}
-	// Letting go early makes a short hop, but not before MIN_JUMP_HOLD: a quick
-	// tap is a full jump. On a touch screen every jump is a full one: a thumb
-	// on glass cannot judge a few hundredths of a second, and a ledge you
-	// reached once you should reach every time.
+	// Letting go early makes a short hop. On a touch screen every jump is a
+	// full one: a thumb on glass cannot judge a few hundredths of a second.
 	when !TOUCH_CONTROLS {
-		if p.holding_jump && !jump_held && p.jump_time >= MIN_JUMP_HOLD {
+		if p.holding_jump && !in_.jump_held && p.jump_time >= MIN_JUMP_HOLD {
 			if p.vel.y < 0 {
 				p.vel.y *= JUMP_CUT
 			}
 			p.holding_jump = false
 		}
-	} else {
-		_ = jump_held
 	}
 	if p.vel.y >= 0 {
 		p.holding_jump = false
 	}
 
-	gravity: f32 = p.vel.y > 0 ? GRAVITY * FALL_GRAVITY : GRAVITY
-	p.vel.y = min(p.vel.y + gravity * dt, MAX_FALL)
-	if p.wall_dir != 0 {
-		p.vel.y = min(p.vel.y, WALL_SLIDE_SPEED)
+	if !dashing {
+		gravity: f32 = GRAVITY
+		switch {
+		case abs(p.vel.y) < APEX_WINDOW && in_.jump_held:
+			gravity *= APEX_GRAVITY
+		case p.vel.y > 0:
+			gravity *= FALL_GRAVITY
+		}
+		p.vel.y = min(p.vel.y + gravity * dt, MAX_FALL)
+		if p.wall_dir != 0 {
+			p.vel.y = min(p.vel.y, WALL_SLIDE_SPEED)
+		}
 	}
 
 	// --- move and collide ----------------------------------------------------
 	wall_hit: bool
 	before := r
 	r, wall_hit = move_x(m, r, p.vel.x * dt)
-	if wall_hit && !p.grounded && move != 0 && (move > 0) == (p.vel.x > 0) {
+	if wall_hit && !p.grounded && (dashing || (move != 0 && (move > 0) == (p.vel.x > 0))) {
 		// Ledge assist: the feet came up just short of the top of the wall
 		// being pushed into. Lift them over rather than slide back down.
 		if lifted, ok := ledge_lift(m, before, p.vel.x * dt); ok {
@@ -248,11 +325,11 @@ player_update :: proc(g: ^Game, dt: f32) {
 	falling_speed := p.vel.y
 	grounded, bumped_head: bool
 	pre := r
-	r, grounded, bumped_head = move_y(m, r, p.vel.y * dt, down)
+	r, grounded, bumped_head = move_y(m, r, p.vel.y * dt, in_.down && !dashing)
 	if bumped_head {
 		// Corner nudge: a head that only clipped the edge of a tile slides
 		// sideways past it and the jump carries on.
-		if nudged, ok := corner_nudge(m, pre, p.vel.y * dt, down); ok {
+		if nudged, ok := corner_nudge(m, pre, p.vel.y * dt, in_.down); ok {
 			r = nudged
 			bumped_head = false
 		}
@@ -262,29 +339,39 @@ player_update :: proc(g: ^Game, dt: f32) {
 			spawn_burst(g, {r.x + PLAYER_W / 2, r.y + PLAYER_H}, {200, 220, 190, 255}, 5, 70, 1.0)
 		}
 		p.vel.y = 0
-		p.coyote = COYOTE_TIME
-		p.air_jumps = 1
+		if dashing && p.dash_dir.x == 0 {
+			// A dash straight down stops on the floor; a diagonal one turns
+			// into a slide along it.
+			p.dash_time = 0
+			p.vel = {}
+		}
+	} else if p.vel.y >= 0 {
+		// Nothing moved down this frame (a sideways dash has no gravity), so
+		// ask for the ground directly.
+		grounded = on_ground(m, r)
 	}
 	if bumped_head {
 		p.vel.y = 0
 	}
+	if grounded {
+		p.coyote = COYOTE_TIME
+	}
 	p.grounded = grounded
+	if p.grounded && p.since_dash > DASH_REFILL_DELAY && p.dashes < 1 && p.dash_time <= 0 {
+		player_refill_dash(p)
+	}
 	p.pos = {r.x + PLAYER_W / 2, r.y + PLAYER_H}
 
-	if tilemap_touches_hazard(m, player_rect(p^)) {
-		player_kill(p, a)
-	}
-
-	// --- shooting ------------------------------------------------------------
-	if in_.fire && p.fire_cd <= 0 {
-		player_shoot(g)
+	if tilemap_touches_hazard(m, player_rect(p^)) || p.pos.y > tilemap_bounds(m).y + FALL_DEATH_MARGIN {
+		player_kill(g)
+		return
 	}
 
 	// --- animation -----------------------------------------------------------
 	body := &a.player.idle
 	switch {
-	case p.invuln > INVULN_TIME - 0.35:
-		body = &a.player.hit
+	case p.dash_time > 0:
+		body = &a.player.double_jump
 	case p.wall_dir != 0:
 		body = &a.player.wall_slide
 	case !p.grounded && p.anim.anim == &a.player.double_jump && !p.anim.finished:
@@ -298,6 +385,29 @@ player_update :: proc(g: ^Game, dt: f32) {
 	}
 	animator_play(&p.anim, body)
 	animator_update(&p.anim, dt)
+}
+
+@(private = "file")
+start_jump :: proc(p: ^Player) {
+	p.grounded = false
+	p.coyote = 0
+	p.jump_buffer = 0
+	p.holding_jump = true
+	p.jump_time = 0
+}
+
+// Gives the dash back, with a flash so you can see it happen.
+player_refill_dash :: proc(p: ^Player) {
+	if p.dashes >= 1 {
+		return
+	}
+	p.dashes = 1
+	p.flash = 0.12
+}
+
+@(private = "file")
+grow_x :: proc(r: rl.Rectangle, by: f32) -> rl.Rectangle {
+	return {r.x - by, r.y, r.width + by * 2, r.height}
 }
 
 @(private = "file")
@@ -334,108 +444,89 @@ ledge_lift :: proc(m: ^Tilemap, r: rl.Rectangle, dx: f32) -> (rl.Rectangle, bool
 	return r, false
 }
 
+// --------------------------------------------------------------- the trail ---
+
 @(private = "file")
-player_shoot :: proc(g: ^Game) {
+trail_push :: proc(p: ^Player) {
+	for i := TRAIL_LEN - 1; i > 0; i -= 1 {
+		p.trail[i] = p.trail[i - 1]
+	}
+	p.trail[0] = {
+		pos   = p.pos,
+		flip  = p.flip,
+		anim  = p.anim.anim,
+		frame = p.anim.frame,
+		life  = 0.22,
+	}
+}
+
+@(private = "file")
+trail_update :: proc(p: ^Player, dt: f32) {
+	for &t in p.trail {
+		t.life = max(0, t.life - dt)
+	}
+}
+
+// ------------------------------------------------------------ life and death ---
+
+// One hit is a death. The body bursts, and a moment later you are back at the
+// last checkpoint you touched.
+player_kill :: proc(g: ^Game) {
 	p := &g.player
-	w := &p.weapon
-
-	if !w.infinite && w.ammo <= 0 {
-		player_drop_to_sidearm(g)
-		return
-	}
-
-	hand := player_hand(p^)
-	weapon_fire(g, w, weapon_muzzle(w^, hand, p.aim), p.aim)
-	p.fire_cd = w.fire_time / max(p.fire_rate, 0.1)
-	if !w.infinite {
-		w.ammo -= 1
-	}
-
-	// A little push back, so heavy guns are felt in the movement too.
-	recoil := w.knockback * f32(max(1, w.pellets)) * 0.09
-	p.vel.x -= math.cos(p.aim) * recoil
-	if !p.grounded {
-		p.vel.y -= math.sin(p.aim) * recoil * 0.35
-	}
-
-	if !w.infinite && w.ammo <= 0 {
-		player_drop_to_sidearm(g)
-	}
-}
-
-// An empty gun is thrown away and the trusty pistol comes back out, so a run can
-// never stall on a weapon that cannot shoot.
-player_drop_to_sidearm :: proc(g: ^Game) {
-	g.player.weapon = weapon_starter()
-	g.notice = "OUT OF AMMO - SIDEARM READY"
-	g.notice_timer = 2.2
-}
-
-player_take_weapon :: proc(g: ^Game, w: Weapon) {
-	g.player.weapon = w
-	g.player.fire_cd = 0
-	g.notice = ""
-	g.notice_timer = 2.6
-	play(&g.assets, .Power_Up)
-}
-
-player_hurt :: proc(p: ^Player, a: ^Assets, source_x: f32) -> bool {
-	if p.dead || p.invuln > 0 {
-		return false
-	}
-	p.health -= 1
-	p.invuln = INVULN_TIME
-	p.vel.y = -180
-	p.vel.x = p.pos.x < source_x ? -140 : 140
-	if p.health <= 0 {
-		player_kill(p, a)
-	} else {
-		animator_restart(&p.anim, &a.player.hit)
-		play(a, .Hurt)
-	}
-	return true
-}
-
-player_kill :: proc(p: ^Player, a: ^Assets) {
 	if p.dead {
 		return
 	}
 	p.dead = true
-	p.health = 0
-	p.death_timer = DEATH_DELAY
-	animator_restart(&p.anim, &a.player.hit)
-	play(a, .Hurt)
+	p.death_timer = DEATH_TIME
+	p.dash_time = 0
+	g.deaths += 1
+	g.shake = max(g.shake, 6)
+	g.freeze = 0.06
+	c := player_centre(p^)
+	spawn_burst(g, c, {255, 255, 255, 255}, 18, 170, 1.6)
+	spawn_burst(g, c, {255, 120, 120, 255}, 12, 110, 1.2)
+	play(&g.assets, .Hurt)
 }
 
-player_heal :: proc(p: ^Player, amount := 1) -> bool {
-	if p.health >= p.max_health {
-		return false
-	}
-	p.health = min(p.max_health, p.health + amount)
-	return true
+@(private = "file")
+player_respawn :: proc(g: ^Game) {
+	player_init(&g.player, g.respawn)
+	spawn_burst(g, player_centre(g.player), {200, 230, 255, 255}, 12, 80, 1.0)
 }
 
-// Buying a heart container raises the ceiling and fills the new slot, so the
-// purchase is felt immediately rather than only after finding a rune.
-player_add_heart :: proc(p: ^Player) -> bool {
-	if p.max_health >= HEALTH_CAP {
-		return false
-	}
-	p.max_health += 1
-	p.health += 1
-	return true
-}
+// While the dash is spent the body is tinted cooler, which is the only way to
+// tell at a glance whether you still have it.
+SPENT_TINT :: rl.Color{150, 170, 255, 255}
+DASH_TRAIL_TINT :: rl.Color{120, 180, 255, 255}
 
 player_draw :: proc(p: Player, a: ^Assets) {
-	tint := rl.WHITE
-	if p.invuln > 0 && !p.dead && int(p.invuln * 20) % 2 == 0 {
-		tint = {255, 255, 255, 90}
+	for t in p.trail {
+		if t.life <= 0 || t.anim == nil {
+			continue
+		}
+		c := DASH_TRAIL_TINT
+		c.a = u8(170 * t.life / 0.22)
+		anim_draw_frame(t.anim, t.frame, t.pos, t.flip, c)
 	}
 	if p.dead {
-		tint = {255, 140, 140, 200}
+		return
 	}
-	animator_draw(p.anim, p.pos, p.flip, tint)
-	if !p.dead {
-		weapon_draw(p.weapon, a, player_hand(p), p.aim)
+	tint := rl.WHITE
+	if p.dashes == 0 {
+		tint = SPENT_TINT
+	}
+	scale: f32 = 1
+	if p.respawn_time > 0 {
+		// Arriving back: a quick grow from nothing.
+		k := 1 - p.respawn_time / RESPAWN_TIME
+		scale = 0.4 + 0.6 * k
+	}
+	if p.anim.anim != nil {
+		anim_draw_frame(p.anim.anim, p.anim.frame, p.pos, p.flip, tint, scale)
+		if p.flash > 0 {
+			rl.BeginBlendMode(.ADDITIVE)
+			anim_draw_frame(p.anim.anim, p.anim.frame, p.pos, p.flip, {255, 255, 255, u8(p.flash / 0.12 * 200)}, scale)
+			rl.EndBlendMode()
+		}
 	}
 }
