@@ -62,15 +62,7 @@ draw_title_screen :: proc(g: ^Game) {
 	draw_panel(g, menu_panel(g))
 	draw_menu(g)
 
-	if g.best_time > 0 {
-		draw_text_outlined_centered(
-			a,
-			fmt.ctprintf("BEST  %s  -  %v DEATHS", format_time(g.best_time), g.best_deaths),
-			view.y - 16,
-			8,
-			DIM,
-		)
-	}
+	draw_text_outlined_centered(a, fmt.ctprintf("%v LEVELS", len(g.levels)), view.y - 16, 8, DIM)
 }
 
 @(private = "file")
@@ -139,6 +131,7 @@ draw_end_screen :: proc(g: ^Game) {
 @(private = "file")
 draw_clear_summary :: proc(g: ^Game, r: rl.Rectangle) {
 	a := &g.assets
+	best := g.best[g.level.index]
 	col_w := r.width / 2
 	columns := [2]struct {
 		value: cstring,
@@ -153,7 +146,7 @@ draw_clear_summary :: proc(g: ^Game, r: rl.Rectangle) {
 	centred_in(
 		a,
 		r,
-		fmt.ctprintf("BEST  %s  -  %v DEATHS", format_time(g.best_time), g.best_deaths),
+		fmt.ctprintf("BEST  %s  -  %v DEATHS", format_time(best.time), best.deaths),
 		r.y + 50,
 		8,
 		{140, 104, 70, 255},

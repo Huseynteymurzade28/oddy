@@ -2,3 +2,4 @@ oddy
 *.bin
 /build/
 /libs/raylib/*/libraylib.a
+/levels/backups/

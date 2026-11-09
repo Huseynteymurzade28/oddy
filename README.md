@@ -21,8 +21,8 @@ worlds of five levels each, the last of each a boss you beat without a gun.
 
 1. **Movement** — done: no guns, no procedural rooms; coyote time, jump
    buffering, variable jump height, wall jumps, an 8-way dash, one-hit deaths
-   with an instant respawn. One test course, drawn in text in `level.odin`.
-2. LDtk levels, loaded from JSON.
+   with an instant respawn.
+2. **LDtk levels** — done: `levels/oddy.ldtk`, with levels 1-1 and 1-2.
 3. Traps, moving pieces and enemies you stomp.
 4. The world map, saving, fruit, medals, secret exits, skins.
 5. The fifteen levels and the three bosses.
@@ -39,6 +39,7 @@ worlds of five levels each, the last of each a boss you beat without a gun.
 | `P` / `Esc` | Back, or the pause button in the corner | pause |
 | arrows + `Enter`, or click | tap | menu buttons |
 | `F11` | | fullscreen |
+| `F5` | | read the levels file again (see [Editing levels](#editing-levels)) |
 
 The touch layout can be tried on a desktop with the mouse as one finger:
 `odin run src -define:TOUCH=true -out:oddy`.
@@ -60,6 +61,27 @@ The touch layout can be tried on a desktop with the mouse as one finger:
 - **Numbers.** A jump clears four and a half tiles up and about six and a half
   across at a run; jump and dash at the top about nine; jump and dash straight
   up about eight high.
+
+## Editing levels
+
+The levels live in one [LDtk](https://ldtk.io) project, `levels/oddy.ldtk`,
+and are played in the order LDtk lists them. Open it in LDtk 1.5, draw, save,
+and press `F5` in the running game: it reads the file again and restarts the
+level you are on.
+
+- **Collision** (IntGrid, 16px): `1` rock, `2` one-way platform, `3` spikes
+  (they point away from the rock beside them), `4` water. Only the shape is
+  drawn; the game picks the grass, edges and corners itself from which
+  neighbours are rock.
+- **Entities**: `Player_Start` (one per level), `Checkpoint`, `Exit` (the flag
+  that finishes the level), and `Hint`, a line of text floating in the level
+  (its `Text` field).
+- **Level fields**: `Name`, shown when the level starts and on the clear card,
+  and `Zone` (`Mossy`, `Drowned`, `Ember`), which picks the colours, the light
+  and what drifts through the air.
+
+Anything else in the file is ignored by the game. If the file cannot be read,
+the game starts in a bare room whose hint says why.
 
 ## Android
 
@@ -98,7 +120,8 @@ nothing but import cycles, so files are grouped by prefix instead.
 | `input.odin` | keyboard and touch, read into one `Input` per frame |
 | `player.odin` | movement, jumps, the dash, death and respawn |
 | `physics.odin` | axis-separated AABB vs tiles, one-way platforms |
-| `level.odin` | a level: tiles, start, checkpoints, the flag; the test course |
+| `ldtk.odin` | reading `levels/oddy.ldtk` |
+| `level.odin` | the level being played: checkpoints, the flag, hints, best clears |
 | `tilemap.odin` | tile grid, spikes, materials, nine-slicing, drawing |
 | `camera.odin` | virtual resolution, the following camera, parallax, vignette |
 | `lighting.odin` | the light map and every light in it |
@@ -123,4 +146,4 @@ and nothing else opens a file, so moving or replacing art is a one-file change.
 that play (the flag), and the sibling folders are numbered still images kept
 for scenery — `grass/`, `bushes/`, `stones/`, `ridges/`,
 `fence/`, `boxes/`, `trees/`, `willows/`, `ladders/`, `pointers/`. They are not
-loaded at the moment; the LDtk levels will place them.
+loaded at the moment.

@@ -9,8 +9,8 @@
 # a platform and the NDK, a JDK for apksigner, and the Android raylib from
 # tools/build_raylib.sh. Signs with the debug keystore Android Studio makes.
 #
-# The APK's assets/ holds the repo's assets/ folder as-is, so the game's
-# "assets/..." paths resolve through raylib's AAssetManager fopen wrapper.
+# The APK's assets/ holds the repo's assets/ and levels/ folders as-is, so the
+# game's "assets/..." and "levels/..." paths resolve through raylib's AAssetManager fopen wrapper.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -40,6 +40,7 @@ ODIN_ANDROID_NDK="$ndk" ODIN_ANDROID_SDK="$sdk" \
 
 echo "== packaging"
 cp -r "$root/assets" "$build/stage/assets/assets"
+cp -r "$root/levels" "$build/stage/assets/levels"
 "$tools/aapt2" compile --dir "$root/android/res" -o "$build/res.zip"
 "$tools/aapt2" link -o "$build/unaligned.apk" -I "$platform/android.jar" \
 	--manifest "$root/android/AndroidManifest.xml" \

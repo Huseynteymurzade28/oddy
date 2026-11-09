@@ -24,6 +24,8 @@ Game :: struct {
 	ui:           Ui_State,
 	state_time:   f32, // how long the current state has lasted
 	quit:         bool, // asked to leave from the title
+	levels:       [dynamic]Level_Data, // every level in the file, in order
+	best:         [dynamic]Level_Best, // one per level
 	level:        Level,
 	map_tiles:    Tilemap,
 	player:       Player,
@@ -44,18 +46,13 @@ Game :: struct {
 	deaths:       int,
 	level_time:   f32,
 	level_intro:  f32, // the level's name, fading out
-
-	// the best clears so far this session
-	best_time:    f32, // 0 until the level has been cleared once
-	best_deaths:  int, // -1 until then
 }
 
 game_init :: proc(g: ^Game) {
 	assets_load(&g.assets)
 	touch_init(&g.touch)
-	g.best_deaths = -1
-	level_load_test(g)
-	level_restart(g)
+	levels_reload(g)
+	level_enter(g, 0)
 	game_set_state(g, .Title)
 	rl.PlayMusicStream(g.assets.music)
 }
@@ -65,6 +62,8 @@ game_destroy :: proc(g: ^Game) {
 	touch_destroy(&g.touch)
 	tilemap_destroy(&g.map_tiles)
 	level_destroy(&g.level)
+	levels_destroy(&g.levels)
+	delete(g.best)
 	delete(g.sparks)
 	delete(g.decor)
 	delete(g.motes)
@@ -77,6 +76,15 @@ game_update :: proc(g: ^Game, dt: f32) {
 	g.state_time += dt
 	rl.UpdateMusicStream(g.assets.music)
 	g.input = input_poll(g)
+
+	// F5 reads the levels file again and restarts the level you are on, so
+	// a change saved in LDtk can be played a second later.
+	when !IS_MOBILE {
+		if rl.IsKeyPressed(.F5) {
+			levels_reload(g)
+			level_enter(g, g.level.index)
+		}
+	}
 
 	// A phone going to sleep, or a window losing focus, pauses the level
 	// rather than letting it run on while nobody is looking.
@@ -167,6 +175,7 @@ game_draw :: proc(g: ^Game) {
 	atmosphere_draw(g, view)
 	motes_draw(g)
 	sparks_draw(g)
+	level_draw_hints(g)
 	draw_vignette(g, view)
 	rl.EndMode2D()
 

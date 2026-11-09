@@ -132,5 +132,5 @@ draw_level_name :: proc(g: ^Game) {
 	}
 	t := g.level_intro
 	alpha := u8(clamp(min(t, LEVEL_INTRO_TIME - t) * 3, 0, 1) * 255)
-	draw_text_outlined_centered(&g.assets, g.level.name, 40, 16, {255, 214, 110, alpha})
+	draw_text_outlined_centered(&g.assets, g.level.name, 18, 16, {255, 214, 110, alpha})
 }

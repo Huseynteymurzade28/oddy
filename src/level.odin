@@ -1,15 +1,13 @@
 package game
 
+import "core:fmt"
+import "core:math"
+import "core:strings"
 import rl "../libs/raylib"
 
 /*
-One level: its tiles, where you start, the checkpoints along the way and the
-flag at the end. For now the only level is the test course below, drawn in
-text; Phase 2 replaces it with levels authored in LDtk.
-
-  #  rock          -  one-way platform    ~  water (kills)
-  ^  spikes (they point away from the rock they grow on)
-  P  where you start   C  a checkpoint   E  the flag at the end
+The level being played: built from one `Level_Data` (see `ldtk.odin`), plus
+what changes while you play it: which checkpoints are lit.
 */
 
 Checkpoint :: struct {
@@ -18,11 +16,21 @@ Checkpoint :: struct {
 }
 
 Level :: struct {
-	name:        cstring,
+	index:       int, // into `g.levels`
+	name:        cstring, // these three are borrowed from the level's data
 	zone:        Zone,
+	hints:       []Hint,
 	spawn:       rl.Vector2,
 	exit:        rl.Vector2,
 	checkpoints: [dynamic]Checkpoint,
+}
+
+// The best clear of each level this session, kept apart from the level data
+// so reloading the levels file does not forget it.
+Level_Best :: struct {
+	cleared: bool,
+	time:    f32,
+	deaths:  int,
 }
 
 CHECKPOINT_REACH :: rl.Vector2{14, 30}
@@ -38,45 +46,68 @@ flag_rect :: proc(pos, reach: rl.Vector2) -> rl.Rectangle {
 	return {pos.x - reach.x / 2, pos.y - reach.y, reach.x, reach.y}
 }
 
-level_load_text :: proc(g: ^Game, name: cstring, zone: Zone, rows: []string) {
-	level_destroy(&g.level)
-	tilemap_destroy(&g.map_tiles)
-
-	h := len(rows)
-	w := 0
-	for row in rows {
-		w = max(w, len(row))
+// (Re)reads the levels file. If it cannot be read the game still starts, in a
+// bare room whose only hint says what went wrong.
+levels_reload :: proc(g: ^Game) {
+	levels_destroy(&g.levels)
+	levels, err := ldtk_load(LEVELS_PATH)
+	if err != "" {
+		fmt.eprintln("levels:", err)
+		levels = fallback_levels(err)
 	}
-	g.map_tiles = tilemap_make(w, h)
-	g.level.name = name
-	g.level.zone = zone
-
-	for row, y in rows {
-		for ch, x in row {
-			foot := rl.Vector2{f32(x) * TILE + TILE / 2, f32(y + 1) * TILE}
-			switch ch {
-			case '#':
-				tile_set(&g.map_tiles, x, y, .Rock)
-			case '-':
-				tile_set(&g.map_tiles, x, y, .Platform)
-			case '~':
-				tile_set(&g.map_tiles, x, y, .Water)
-			case '^':
-				tile_set(&g.map_tiles, x, y, .Spike)
-			case 'P':
-				g.level.spawn = foot
-			case 'C':
-				append(&g.level.checkpoints, Checkpoint{pos = foot})
-			case 'E':
-				g.level.exit = foot
-			}
-		}
-	}
-	decor_scatter(g)
+	g.levels = levels
+	resize(&g.best, len(g.levels))
 }
 
-level_load_test :: proc(g: ^Game) {
-	level_load_text(g, "TEST COURSE", .Mossy, TEST_LEVEL[:])
+@(private = "file")
+fallback_levels :: proc(err: string) -> [dynamic]Level_Data {
+	d := Level_Data {
+		ident  = strings.clone("Fallback"),
+		name   = strings.clone_to_cstring("NO LEVELS"),
+		width  = 30,
+		height = 12,
+		spawn  = {5 * TILE, 10 * TILE},
+		exit   = {26 * TILE, 10 * TILE},
+	}
+	d.tiles = make([]Tile, d.width * d.height)
+	for x in 0 ..< d.width {
+		d.tiles[10 * d.width + x] = .Rock
+		d.tiles[11 * d.width + x] = .Rock
+	}
+	append(&d.hints, Hint{pos = {15 * TILE, 6 * TILE}, text = strings.clone_to_cstring(strings.to_upper(err, context.temp_allocator))})
+	levels: [dynamic]Level_Data
+	append(&levels, d)
+	return levels
+}
+
+// Builds level `index` and puts you at its start.
+level_enter :: proc(g: ^Game, wanted: int) {
+	index := clamp(wanted, 0, len(g.levels) - 1)
+	d := &g.levels[index]
+
+	level_destroy(&g.level)
+	tilemap_destroy(&g.map_tiles)
+	g.map_tiles = tilemap_make(d.width, d.height)
+	copy(g.map_tiles.tiles, d.tiles)
+
+	g.level = Level {
+		index = index,
+		name  = d.name,
+		zone  = d.zone,
+		hints = d.hints[:],
+		spawn = d.spawn,
+		exit  = d.exit,
+	}
+	for c in d.checkpoints {
+		append(&g.level.checkpoints, Checkpoint{pos = c})
+	}
+	g.bg_tint = {}
+	decor_scatter(g)
+	level_restart(g)
+}
+
+level_has_next :: proc(g: ^Game) -> bool {
+	return g.level.index + 1 < len(g.levels)
 }
 
 // Puts the level back the way it was at the start: checkpoints unlit, the
@@ -120,11 +151,14 @@ level_update :: proc(g: ^Game) {
 
 @(private = "file")
 level_clear :: proc(g: ^Game) {
-	if g.best_time == 0 || g.level_time < g.best_time {
-		g.best_time = g.level_time
-	}
-	if g.best_deaths < 0 || g.deaths < g.best_deaths {
-		g.best_deaths = g.deaths
+	// The fastest time and the fewest deaths are kept apart: they will be
+	// separate medals, and need not come from the same clear.
+	best := &g.best[g.level.index]
+	if !best.cleared {
+		best^ = {cleared = true, time = g.level_time, deaths = g.deaths}
+	} else {
+		best.time = min(best.time, g.level_time)
+		best.deaths = min(best.deaths, g.deaths)
 	}
 	spawn_burst(g, g.level.exit - {0, 24}, {255, 214, 110, 255}, 30, 140, 1.5)
 	play(&g.assets, .Power_Up)
@@ -146,30 +180,13 @@ level_draw_flags :: proc(g: ^Game) {
 }
 
 
-@(private = "file")
-TEST_LEVEL := [?]string {
-	"#....................................................................................................................###################.............#",
-	"#....................................................................................................................###################.............#",
-	"#....................................................................................................................###################.............#",
-	"#....................................................................................................................###################.............#",
-	"#....................................................................................................................###################.............#",
-	"#................................##...#########......................................................................###################.............#",
-	"#................................##...#########......................................................................###################.............#",
-	"#................................##...#########......................................................................###################.............#",
-	"#................................##...#########........................############..................................###################.............#",
-	"#................................##...#########........................############..................................###################.............#",
-	"#................................##...#########........................############..................................###################.............#",
-	"#................................##...#########........................############......................................^^^^^^^^^^..................#",
-	"#................................##...#########........................############.........---.............C........................................#",
-	"#................................##...#########..................C.....############......................########....................................#",
-	"#.....................................###############........######################...---................########....................................#",
-	"#.....................................###############........######################...............---....########........^^^^^^^^^^.............E....#",
-	"#..............................C......###############........######################......................#############################################",
-	"#............############....########################........######################......................#############################################",
-	"#...P........############....########################........######################~~~~~~~~~~~~~~~~~~~~~~#############################################",
-	"#########################....########################^^^^^^^^######################~~~~~~~~~~~~~~~~~~~~~~#############################################",
-	"#########################....######################################################~~~~~~~~~~~~~~~~~~~~~~#############################################",
-	"#########################^^^^#########################################################################################################################",
-	"######################################################################################################################################################",
-	"######################################################################################################################################################",
+// The hints float over the level in its own small type, lit or not.
+level_draw_hints :: proc(g: ^Game) {
+	a := &g.assets
+	for h in g.level.hints {
+		w := rl.MeasureTextEx(a.font, h.text, 8, 1).x
+		pos := rl.Vector2{math.round(h.pos.x - w / 2), h.pos.y - 10}
+		rl.DrawTextEx(a.font, h.text, pos + {0, 1}, 8, 1, {10, 8, 16, 170})
+		rl.DrawTextEx(a.font, h.text, pos, 8, 1, {236, 230, 214, 230})
+	}
 }

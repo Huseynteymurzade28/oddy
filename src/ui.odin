@@ -22,6 +22,7 @@ Menu_Action :: enum {
 	Back,
 	Resume,
 	Restart,
+	Next,
 	Menu,
 	Quit,
 }
@@ -103,12 +104,23 @@ menu_items :: proc(g: ^Game) -> []Menu_Item {
 			},
 		)
 	case .Cleared:
-		// Side by side along the bottom of the board.
-		w: f32 = min(BUTTON_W, (panel.width - 30) / 2)
+		// Side by side along the bottom of the board, the next level first.
+		row := make([dynamic]Menu_Item, context.temp_allocator)
+		if level_has_next(g) {
+			append(&row, Menu_Item{label = "NEXT", colour = .Green, action = .Next})
+		}
+		append(&row, Menu_Item{label = "AGAIN", colour = level_has_next(g) ? .Yellow : .Green, action = .Restart})
+		append(&row, Menu_Item{label = "MENU", colour = .Blue, action = .Menu})
+		gap: f32 = 8
+		n := f32(len(row))
+		w: f32 = min(BUTTON_W, (panel.width - 24 - gap * (n - 1)) / n)
 		y := panel.y + panel.height - BUTTON_H - 12
-		cx := panel.x + panel.width / 2
-		append(&items, Menu_Item{label = "AGAIN", colour = .Green, action = .Restart, rect = {cx - w - 5, y, w, BUTTON_H}})
-		append(&items, Menu_Item{label = "MENU", colour = .Blue, action = .Menu, rect = {cx + 5, y, w, BUTTON_H}})
+		x := panel.x + (panel.width - (w * n + gap * (n - 1))) / 2
+		for item, i in row {
+			it := item
+			it.rect = {x + f32(i) * (w + gap), y, w, BUTTON_H}
+			append(&items, it)
+		}
 	case .Playing:
 	}
 	return items[:]
@@ -194,7 +206,7 @@ activate :: proc(g: ^Game, action: Menu_Action) {
 	switch action {
 	case .None:
 	case .Play:
-		level_restart(g)
+		level_enter(g, 0)
 		game_set_state(g, .Playing)
 	case .Resume:
 		game_set_state(g, .Playing)
@@ -207,8 +219,11 @@ activate :: proc(g: ^Game, action: Menu_Action) {
 	case .Restart:
 		level_restart(g)
 		game_set_state(g, .Playing)
+	case .Next:
+		level_enter(g, g.level.index + 1)
+		game_set_state(g, .Playing)
 	case .Menu:
-		level_restart(g)
+		level_enter(g, 0)
 		game_set_state(g, .Title)
 	case .Quit:
 		g.quit = true
