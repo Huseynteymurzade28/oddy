@@ -77,7 +77,6 @@ Trap_Anims :: struct {
 	fire_off:         Anim,
 	fire_hit:         Anim,
 	fire_on:          Anim,
-	platform:         Anim,
 	refill:           Anim,
 	refill_pop:       Anim,
 	spike_head:       Anim,
@@ -135,8 +134,10 @@ Assets :: struct {
 	traps:   Trap_Anims,
 	enemy:   [Enemy_Kind]Creature_Anims,
 	marks:   Checkpoint_Anims,
-	tileset: rl.Texture2D,
-	layers:  [BG_LAYERS]rl.Texture2D,
+	// Oddy's own art, drawn by tools/art/make_art.py: per world, the
+	// terrain sheet and the parallax layers.
+	terrain: [Zone]rl.Texture2D,
+	layers:  [Zone][BG_LAYERS]rl.Texture2D,
 	font:    rl.Font,
 	ui:      Ui_Art,
 	sfx:     [Sfx]rl.Sound,
@@ -216,7 +217,6 @@ assets_load :: proc(a: ^Assets) {
 		fire_off         = anim_load(T + "fire_off.png", 16, 32, 1),
 		fire_hit         = anim_load(T + "fire_hit.png", 16, 32, 4, 0.08, true),
 		fire_on          = anim_load(T + "fire_on.png", 16, 32, 3, 0.07, true),
-		platform         = anim_load(T + "platform.png", 32, 8, 8, 0.05, true),
 		refill           = anim_load(T + "refill_idle.png", 18, 18, 10, 0.07, true),
 		refill_pop       = anim_load(T + "refill_hit.png", 18, 18, 4, 0.06),
 		spike_head       = anim_load(T + "spike_head_idle.png", 54, 52, 1),
@@ -266,13 +266,22 @@ assets_load :: proc(a: ^Assets) {
 		hit  = anim_load(E + "bee/hit.png", 36, 34, 5, 0.06, false, 33),
 	}
 
-	a.tileset = rl.LoadTexture("assets/sprites/tileset.png")
+	ZONE_FILES := [Zone]cstring {
+		.Mossy   = "mossy",
+		.Drowned = "drowned",
+		.Ember   = "ember",
+	}
+	for zone in Zone {
+		name := ZONE_FILES[zone]
+		a.terrain[zone] = rl.LoadTexture(rl.TextFormat("assets/sprites/terrain/%s.png", name))
+		for i in 0 ..< BG_LAYERS {
+			tex := rl.LoadTexture(rl.TextFormat("assets/sprites/background/%s_%d.png", name, i32(i)))
+			rl.SetTextureWrap(tex, .REPEAT)
+			a.layers[zone][i] = tex
+		}
+	}
 
 	// Layer 1 is the farthest away; 5 is the canopy right in front of the camera.
-	for i in 0 ..< BG_LAYERS {
-		a.layers[i] = rl.LoadTexture(rl.TextFormat("assets/sprites/background/%d.png", i32(i + 1)))
-		rl.SetTextureWrap(a.layers[i], .REPEAT)
-	}
 
 	// The font is authored at 8px; drawing it at integer multiples of that with
 	// point filtering keeps it pixel-perfect.
@@ -330,7 +339,7 @@ assets_unload :: proc(a: ^Assets) {
 
 	traps := [?]^Anim {
 		&a.traps.saw, &a.traps.trampoline, &a.traps.trampoline_jump, &a.traps.falling_platform,
-		&a.traps.fan, &a.traps.fire_off, &a.traps.fire_hit, &a.traps.fire_on, &a.traps.platform,
+		&a.traps.fan, &a.traps.fire_off, &a.traps.fire_hit, &a.traps.fire_on,
 		&a.traps.refill, &a.traps.refill_pop, &a.traps.spike_head, &a.traps.spike_head_blink,
 		&a.traps.spike_head_hit,
 		&a.marks.pole, &a.marks.flag_out, &a.marks.flag, &a.marks.end, &a.marks.end_pressed,
@@ -344,9 +353,11 @@ assets_unload :: proc(a: ^Assets) {
 		unload_anims(creature[:])
 	}
 
-	rl.UnloadTexture(a.tileset)
-	for i in 0 ..< BG_LAYERS {
-		rl.UnloadTexture(a.layers[i])
+	for zone in Zone {
+		rl.UnloadTexture(a.terrain[zone])
+		for i in 0 ..< BG_LAYERS {
+			rl.UnloadTexture(a.layers[zone][i])
+		}
 	}
 	rl.UnloadFont(a.font)
 	for c in Ui_Colour {

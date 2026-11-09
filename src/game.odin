@@ -42,7 +42,6 @@ Game :: struct {
 	motes:        [dynamic]Mote, // what drifts through the air
 	liquid_glows: [dynamic]rl.Vector2, // points along lava that light the level
 	lighting:     Lighting,
-	bg_tint:      rl.Color,
 	state:        Game_State,
 	time:         f32, // wall clock, keeps running on menus
 	shake:        f32,

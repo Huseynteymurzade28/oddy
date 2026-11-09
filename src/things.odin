@@ -425,9 +425,12 @@ things_draw :: proc(g: ^Game) {
 			frame := int(g.time / 0.04) % 8
 			anim_draw_rotated(&a.saw, frame, t.pos, 0)
 		case .Moving_Platform:
+			// Two boards of the world's own bridge, ends lashed with rope.
 			draw_track(g, t)
-			frame := int(g.time / 0.05) % 8
-			anim_draw_frame(&a.platform, frame, t.pos + {0, PLATFORM_H / 2}, false)
+			tex := g.assets.terrain[g.level.zone]
+			top := rl.Vector2{math.round(t.pos.x - PLATFORM_W / 2), math.round(t.pos.y - PLATFORM_H / 2)}
+			rl.DrawTexturePro(tex, terrain_source(0, ROW_PLATFORM), {top.x, top.y, TILE, TILE}, {}, 0, rl.WHITE)
+			rl.DrawTexturePro(tex, terrain_source(3, ROW_PLATFORM), {top.x + TILE, top.y, TILE, TILE}, {}, 0, rl.WHITE)
 		case .Falling_Platform:
 			if t.state == 3 {
 				continue

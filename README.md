@@ -198,8 +198,8 @@ nothing but import cycles, so files are grouped by prefix instead.
 | `save.odin` | the save file |
 | `things.odin` | traps and moving pieces |
 | `enemy.odin` | the creatures, and landing on them |
-| `tilemap.odin` | tile grid, spikes, materials, nine-slicing, drawing |
-| `camera.odin` | virtual resolution, the following camera, parallax, vignette |
+| `tilemap.odin` | tile grid, spikes, autotiling, grass and flowers, drawing |
+| `camera.odin` | virtual resolution, the following camera, the parallax backdrops |
 | `lighting.odin` | the light map and every light in it |
 | `zone.odin` | the three worlds and how each one looks |
 | `decor.odin` | torches, roots, stalactites, crystals, drifting motes |
@@ -214,7 +214,9 @@ nothing but import cycles, so files are grouped by prefix instead.
 | `ui.odin` | menu buttons and boards: layout, press handling, nine-slicing |
 
 Outside `src/`: `levels/` is the LDtk project, `android/` the manifest,
-launcher icon and the native helper, `tools/` the build scripts, and
+launcher icon and the native helper, `tools/` the build scripts,
+`tools/art/` the Python that draws the terrain and backdrops (`python3
+tools/art/make_art.py`, needs Pillow and NumPy), and
 `.github/workflows/android.yml` the CI that builds the APK.
 
 ## raylib
@@ -227,7 +229,9 @@ Odin or raylib package happens to ship.
 
 ## Credits
 
-Art from Pixel Frog's Pixel Adventure 1 and 2 (CC-BY 4.0: heroes, creatures,
+The worlds themselves (ground, grass and flowers, bridges, water, skies and
+backdrops) are drawn for Oddy by `tools/art/make_art.py`. Characters and traps
+are from Pixel Frog's Pixel Adventure 1 and 2 (CC-BY 4.0: heroes, creatures,
 traps, fruit), menus from Kenney's
 Pixel UI pack (CC0), sound effects from Juhani Junkala's Essential Retro Video
 Game Sound Effects Collection (CC0). The full list, including what is still to

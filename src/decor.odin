@@ -153,6 +153,10 @@ decor_scatter :: proc(g: ^Game) {
 			}
 
 			// On a wall, with open air under it, and never two close together.
+			// Not in the moss: nobody needs a torch in broad daylight.
+			if zone == .Mossy {
+				continue
+			}
 			side: f32 = 0
 			if solid(m, tx - 1, ty) {
 				side = -1

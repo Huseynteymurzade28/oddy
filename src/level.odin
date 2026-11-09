@@ -138,7 +138,6 @@ level_enter :: proc(g: ^Game, wanted: int) {
 			kind = (i + d.number * 3) % FRUIT_KINDS,
 		})
 	}
-	g.bg_tint = {}
 	g.exit_anim = {}
 	decor_scatter(g)
 	level_restart(g)
@@ -368,7 +367,12 @@ level_draw_hints :: proc(g: ^Game) {
 	for h in g.level.hints {
 		w := rl.MeasureTextEx(a.font, h.text, 8, 1).x
 		pos := rl.Vector2{math.round(h.pos.x - w / 2), h.pos.y - 10}
-		rl.DrawTextEx(a.font, h.text, pos + {0, 1}, 8, 1, {10, 8, 16, 170})
-		rl.DrawTextEx(a.font, h.text, pos, 8, 1, {236, 230, 214, 230})
+		// A dark outline all round: readable over sky, grass and rock alike.
+		ink := rl.Color{40, 26, 34, 230}
+		for d in ([8]rl.Vector2{{-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, -1}, {1, -1}, {-1, 1}, {1, 1}}) {
+			rl.DrawTextEx(a.font, h.text, pos + d, 8, 1, ink)
+		}
+		rl.DrawTextEx(a.font, h.text, pos + {0, 2}, 8, 1, ink)
+		rl.DrawTextEx(a.font, h.text, pos, 8, 1, {255, 250, 232, 255})
 	}
 }

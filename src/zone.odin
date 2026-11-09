@@ -32,7 +32,7 @@ Zone_Look :: struct {
 
 ZONE_LOOKS := [Zone]Zone_Look {
 	.Mossy = {
-		ambient    = {214, 224, 196, 255},
+		ambient    = {255, 255, 255, 255}, // broad daylight
 		rock       = {255, 255, 255, 255},
 		background = {255, 255, 236, 255},
 		liquid     = {220, 250, 255, 210},
@@ -40,7 +40,7 @@ ZONE_LOOKS := [Zone]Zone_Look {
 		accent     = {255, 206, 120, 255},
 	},
 	.Drowned = {
-		ambient    = {168, 196, 230, 255},
+		ambient    = {232, 244, 255, 255},
 		rock       = {255, 255, 255, 255},
 		background = {176, 214, 250, 255},
 		liquid     = {170, 220, 255, 220},
@@ -48,7 +48,7 @@ ZONE_LOOKS := [Zone]Zone_Look {
 		accent     = {120, 220, 255, 255},
 	},
 	.Ember = {
-		ambient    = {212, 170, 160, 255},
+		ambient    = {255, 236, 226, 255},
 		rock       = {255, 255, 255, 255},
 		background = {245, 168, 140, 255},
 		liquid     = {255, 120, 50, 245}, // lava

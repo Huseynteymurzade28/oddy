@@ -349,11 +349,22 @@ GOLD_LIGHT :: rl.Color{255, 240, 170, 255}
 @(private = "file")
 INK :: rl.Color{92, 60, 36, 255}
 
+// The road on each world's page: its edge, its earth, and the lighter ruts.
+@(private = "file")
+MAP_ROAD := [WORLDS][3]rl.Color {
+	{{61, 36, 24, 255}, {227, 168, 106, 255}, {242, 211, 162, 255}},
+	{{28, 44, 74, 255}, {154, 208, 230, 255}, {214, 242, 255, 255}},
+	{{26, 14, 26, 255}, {138, 90, 110, 255}, {255, 176, 74, 255}},
+}
+
 world_map_draw :: proc(g: ^Game) {
 	a := &g.assets
 	m := &g.world_map
 	view := view_size()
-	rl.DrawRectangleGradientV(0, 0, rl.GetScreenWidth(), rl.GetScreenHeight(), {14, 10, 26, 150}, {14, 10, 26, 215})
+	// The world itself, panning slowly, with a little shade at the top for
+	// the title to sit on.
+	draw_backdrop(g, WORLD_ZONES[m.world - 1], {g.time * 8, 120}, 240)
+	rl.DrawRectangleGradientV(0, 0, rl.GetScreenWidth(), i32(46 * hud_scale()), {20, 14, 30, 120}, {20, 14, 30, 0})
 
 	// The title, with page arrows when there is somewhere to turn to.
 	title := fmt.ctprintf("WORLD %v  %s", m.world, WORLD_NAMES[m.world - 1])
@@ -382,13 +393,9 @@ world_map_draw :: proc(g: ^Game) {
 		return
 	}
 
-	// The path: dotted between neighbouring stops, and dashed up to secrets.
-	for k in 1 ..< len(list) {
-		if g.levels[list[k]].secret || g.levels[list[k - 1]].secret {
-			continue
-		}
-		draw_dotted(node_pos(g, list[k - 1]), node_pos(g, list[k]), {236, 214, 170, 150})
-	}
+	// The road through every slot of the world, built or not, and a dotted
+	// trail up to any secret found.
+	draw_road(g, MAP_ROAD[m.world - 1])
 	for i in list {
 		if !g.levels[i].secret {
 			continue
@@ -450,13 +457,18 @@ draw_node :: proc(g: ^Game, i: int) {
 		pulse := 0.5 + 0.5 * math.sin(g.time * 5)
 		ring(pos, NODE_R + 4 + pulse * 1.5, 1.5, {255, 240, 190, 220})
 	}
-	fill_circle(pos + {0, 2}, NODE_R, {10, 8, 16, 150})
-	fill_circle(pos, NODE_R, body)
-	ring(pos, NODE_R, 1.5, lerp_color(body, {255, 255, 255, 255}, 0.45))
+	// A medallion on the road: a shadow, a dark rim, the colour, and a
+	// lighter top half where the light catches it.
+	fill_circle(pos + {0, 3}, NODE_R + 1, {20, 14, 30, 110})
+	fill_circle(pos, NODE_R + 1.5, {40, 26, 34, 255})
+	fill_circle(pos, NODE_R, lerp_color(body, {0, 0, 0, 255}, 0.18))
+	fill_circle(pos - {0, 1.5}, NODE_R - 1.5, body)
+	fill_circle(pos - {2.5, 4}, 3, lerp_color(body, {255, 255, 255, 255}, 0.5))
 	label := d.secret ? fmt.ctprintf("S") : fmt.ctprintf("%v", d.number)
 	if !open {
 		label = "-"
 	}
+	draw_text_center_at(a, label, pos - {0, 3}, 8, {40, 26, 34, 200})
 	draw_text_center_at(a, label, pos - {0, 4}, 8, {255, 255, 255, 255})
 
 	// Three dots for the medals: time, deathless, fruit.
@@ -589,6 +601,47 @@ draw_hero_picker :: proc(g: ^Game) {
 		}
 	}
 	draw_text_outlined_centered(a, "TAP A HERO TO PLAY AS THEM", view.y - 40, 8, {210, 210, 230, 255})
+}
+
+// A winding dirt road through the five stops: a dark edge, the earth, and
+// paler ruts down the middle, sampled along a smooth curve.
+@(private = "file")
+draw_road :: proc(g: ^Game, c: [3]rl.Color) {
+	view := view_size()
+	pts: [LEVELS_PER_WORLD + 2]rl.Vector2
+	for n in 0 ..< LEVELS_PER_WORLD {
+		pts[n + 1] = {view.x * (0.14 + 0.18 * f32(n)), SLOT_Y[n]}
+	}
+	pts[0] = pts[1] - {60, -14} // the road comes in from off the left edge
+	pts[LEVELS_PER_WORLD + 1] = pts[LEVELS_PER_WORLD] + {60, 10}
+	samples := make([dynamic]rl.Vector2, context.temp_allocator)
+	for i in 0 ..< len(pts) - 1 {
+		p0 := pts[max(i - 1, 0)]
+		p1 := pts[i]
+		p2 := pts[i + 1]
+		p3 := pts[min(i + 2, len(pts) - 1)]
+		for k in 0 ..< 14 {
+			t := f32(k) / 14
+			t2, t3 := t * t, t * t * t
+			p := 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3)
+			append(&samples, p)
+		}
+	}
+	for p in samples {
+		fill_circle(p + {0, 2}, 7.5, {20, 14, 30, 60})
+	}
+	for p in samples {
+		fill_circle(p, 7, c[0])
+	}
+	for p in samples {
+		fill_circle(p, 5.5, c[1])
+	}
+	for p, i in samples {
+		if i % 3 == 0 {
+			fill_circle(p + {0, -1.5}, 1, c[2])
+			fill_circle(p + {0, 1.5}, 1, c[2])
+		}
+	}
 }
 
 @(private = "file")

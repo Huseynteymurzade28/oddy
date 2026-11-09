@@ -152,10 +152,12 @@ draw_iris :: proc(g: ^Game) {
 @(private = "file")
 draw_stats :: proc(g: ^Game) {
 	a := &g.assets
-	draw_text_shadow(a, fmt.ctprintf("%s", format_time(g.level_time)), {6, 5}, 8, rl.RAYWHITE)
-	draw_skull(6, 17, {8, 6, 14, 150})
-	draw_skull(6, 16, {236, 228, 240, 255})
-	draw_text_shadow(a, fmt.ctprintf("%v", g.deaths), {16, 15}, 8, rl.RAYWHITE)
+	draw_text_outlined(a, fmt.ctprintf("%s", format_time(g.level_time)), {6, 5}, 8, rl.RAYWHITE)
+	draw_skull(5, 16, {40, 26, 34, 230})
+	draw_skull(7, 16, {40, 26, 34, 230})
+	draw_skull(6, 17, {40, 26, 34, 230})
+	draw_skull(6, 16, {255, 250, 240, 255})
+	draw_text_outlined(a, fmt.ctprintf("%v", g.deaths), {16, 15}, 8, rl.RAYWHITE)
 }
 
 @(private = "file")
