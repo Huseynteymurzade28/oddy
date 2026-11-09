@@ -101,8 +101,37 @@ Checkpoint_Anims :: struct {
 	end_pressed: Anim,
 }
 
+// The four heroes of Pixel Adventure 1. All ship the same sheets.
+Skin :: enum u8 {
+	Virtual_Guy,
+	Ninja_Frog,
+	Pink_Man,
+	Mask_Dude,
+}
+
+SKIN_FOLDERS := [Skin]cstring {
+	.Virtual_Guy = "virtual_guy",
+	.Ninja_Frog  = "ninja_frog",
+	.Pink_Man    = "pink_man",
+	.Mask_Dude   = "mask_dude",
+}
+
+SKIN_NAMES := [Skin]cstring {
+	.Virtual_Guy = "VIRTUAL GUY",
+	.Ninja_Frog  = "NINJA FROG",
+	.Pink_Man    = "PINK MAN",
+	.Mask_Dude   = "MASK DUDE",
+}
+
+FRUIT_KINDS :: 8
+
 Assets :: struct {
+	// The hero being played. A copy of one of `skins`, so the animator can
+	// point into it whichever hero it is.
 	player:  Player_Anims,
+	skins:   [Skin]Player_Anims,
+	fruit:   [FRUIT_KINDS]Anim,
+	fruit_got: Anim, // the sparkle a fruit leaves when it is kept
 	traps:   Trap_Anims,
 	enemy:   [Enemy_Kind]Creature_Anims,
 	marks:   Checkpoint_Anims,
@@ -141,20 +170,39 @@ UI_COLOUR_NAMES := [Ui_Colour]cstring {
 }
 
 assets_load :: proc(a: ^Assets) {
-	P :: "assets/sprites/player/"
-	a.player = {
-		idle        = anim_load(P + "idle.png", 32, 32, 11, 0.12, true),
-		run         = anim_load(P + "run.png", 32, 32, 12, 0.06, true),
-		jump        = anim_load(P + "jump.png", 32, 32, 1),
-		fall        = anim_load(P + "fall.png", 32, 32, 1),
-		double_jump = anim_load(P + "double_jump.png", 32, 32, 6, 0.05),
-		wall_slide  = anim_load(P + "wall_slide.png", 32, 32, 5, 0.10, true),
-		hit         = anim_load(P + "hit.png", 32, 32, 7, 0.05),
-		// 96px cells with the puff centred: anchored so `pos` is the feet of
-		// a 32px character standing in the middle.
-		appear      = anim_load(P + "appear.png", 96, 96, 7, 0.045, false, 64),
-		disappear   = anim_load(P + "disappear.png", 96, 96, 7, 0.045, false, 64),
+	for skin in Skin {
+		dir := SKIN_FOLDERS[skin]
+		path :: proc(dir, file: cstring) -> cstring {
+			return rl.TextFormat("assets/sprites/skins/%s/%s.png", dir, file)
+		}
+		a.skins[skin] = {
+			idle        = anim_load(path(dir, "idle"), 32, 32, 11, 0.12, true),
+			run         = anim_load(path(dir, "run"), 32, 32, 12, 0.06, true),
+			jump        = anim_load(path(dir, "jump"), 32, 32, 1),
+			fall        = anim_load(path(dir, "fall"), 32, 32, 1),
+			double_jump = anim_load(path(dir, "double_jump"), 32, 32, 6, 0.05),
+			wall_slide  = anim_load(path(dir, "wall_slide"), 32, 32, 5, 0.10, true),
+			hit         = anim_load(path(dir, "hit"), 32, 32, 7, 0.05),
+		}
 	}
+	// 96px cells with the puff centred: anchored so `pos` is the feet of a
+	// 32px character standing in the middle. Shared by every hero.
+	P :: "assets/sprites/player/"
+	appear := anim_load(P + "appear.png", 96, 96, 7, 0.045, false, 64)
+	disappear := anim_load(P + "disappear.png", 96, 96, 7, 0.045, false, 64)
+	for skin in Skin {
+		a.skins[skin].appear = appear
+		a.skins[skin].disappear = disappear
+	}
+	assets_use_skin(a, .Virtual_Guy)
+
+	F :: "assets/sprites/fruit/"
+	fruit_files := [FRUIT_KINDS]cstring{"apple", "cherries", "kiwi", "bananas", "melon", "orange", "pineapple", "strawberry"}
+	for name, i in fruit_files {
+		// Centred in its 32px cell, so anchored at the middle.
+		a.fruit[i] = anim_load(rl.TextFormat(F + "%s.png", name), 32, 32, 17, 0.05, true, 16)
+	}
+	a.fruit_got = anim_load(F + "collected.png", 32, 32, 6, 0.05, false, 16)
 
 	T :: "assets/sprites/traps/"
 	a.traps = {
@@ -268,18 +316,17 @@ unload_anims :: proc(anims: []^Anim) {
 }
 
 assets_unload :: proc(a: ^Assets) {
-	player := [?]^Anim {
-		&a.player.idle,
-		&a.player.run,
-		&a.player.jump,
-		&a.player.fall,
-		&a.player.double_jump,
-		&a.player.wall_slide,
-		&a.player.hit,
-		&a.player.appear,
-		&a.player.disappear,
+	for skin in Skin {
+		k := &a.skins[skin]
+		hero := [?]^Anim{&k.idle, &k.run, &k.jump, &k.fall, &k.double_jump, &k.wall_slide, &k.hit}
+		unload_anims(hero[:])
 	}
-	unload_anims(player[:])
+	puffs := [?]^Anim{&a.skins[.Virtual_Guy].appear, &a.skins[.Virtual_Guy].disappear}
+	unload_anims(puffs[:])
+	for &f in a.fruit {
+		rl.UnloadTexture(f.texture)
+	}
+	rl.UnloadTexture(a.fruit_got.texture)
 
 	traps := [?]^Anim {
 		&a.traps.saw, &a.traps.trampoline, &a.traps.trampoline_jump, &a.traps.falling_platform,
@@ -312,6 +359,12 @@ assets_unload :: proc(a: ^Assets) {
 		rl.UnloadSound(a.sfx[s])
 	}
 	rl.UnloadMusicStream(a.music)
+}
+
+// Puts on a hero. Everything that animates the player points into
+// `a.player`, so changing it in place is all a change of hero takes.
+assets_use_skin :: proc(a: ^Assets, skin: Skin) {
+	a.player = a.skins[skin]
 }
 
 play :: proc(a: ^Assets, s: Sfx) {

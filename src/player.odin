@@ -592,6 +592,7 @@ player_kill :: proc(g: ^Game) {
 	spawn_burst(g, c, {255, 255, 255, 255}, 18, 170, 1.6)
 	spawn_burst(g, c, {255, 120, 120, 255}, 12, 110, 1.2)
 	spawn_poof(g, &g.assets.player.disappear, p.pos)
+	level_drop_fruit(g)
 	play(&g.assets, .Death)
 	haptic(.Death)
 }

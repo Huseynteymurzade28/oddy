@@ -7,7 +7,11 @@ import rl "../libs/raylib"
 
 /*
 The level being played: built from one `Level_Data` (see `ldtk.odin`), plus
-what changes while you play it: which checkpoints are lit.
+what changes while you play it: which checkpoints are lit, and the fruit.
+
+Fruit works the way it does in Celeste. Touch one and it follows you; it is
+only yours once you have stood on solid ground with it for a moment (or
+reached a checkpoint or the end). Die first and it goes back where it was.
 */
 
 Checkpoint :: struct {
@@ -23,22 +27,45 @@ Level :: struct {
 	hints:       []Hint,
 	spawn:       rl.Vector2,
 	exit:        rl.Vector2,
+	secret_exit: rl.Vector2, // zero for none
 	checkpoints: [dynamic]Checkpoint,
+	fruit:       [dynamic]Fruit,
+	kept:        u64, // fruit kept on this attempt, bit per fruit
 }
 
-// The best clear of each level this session, kept apart from the level data
-// so reloading the levels file does not forget it.
-Level_Best :: struct {
-	cleared: bool,
-	time:    f32,
-	deaths:  int,
+Fruit_State :: enum u8 {
+	Waiting,
+	Following,
+	Kept,
 }
+
+Fruit :: struct {
+	home:  rl.Vector2,
+	pos:   rl.Vector2,
+	state: Fruit_State,
+	had:   bool, // already kept on an earlier visit: drawn as a ghost
+	kind:  int,
+}
+
+// What the last clear earned, for the card that says so.
+Clear_Result :: struct {
+	secret:     bool, // left through the secret exit
+	new_medals: Medals,
+	medals:     Medals,
+	fruit:      int, // kept, of
+	fruit_of:   int,
+	new_skin:   bool,
+}
+
+FRUIT_SECURE :: 0.25 // seconds on solid ground with a fruit before it is yours
+FRUIT_REACH :: 11.0
 
 CHECKPOINT_REACH :: rl.Vector2{14, 30}
 EXIT_REACH :: rl.Vector2{16, 34}
 
 level_destroy :: proc(l: ^Level) {
 	delete(l.checkpoints)
+	delete(l.fruit)
 	l^ = {}
 }
 
@@ -57,7 +84,6 @@ levels_reload :: proc(g: ^Game) {
 		levels = fallback_levels(err)
 	}
 	g.levels = levels
-	resize(&g.best, len(g.levels))
 }
 
 @(private = "file")
@@ -96,11 +122,21 @@ level_enter :: proc(g: ^Game, wanted: int) {
 		name  = d.name,
 		zone  = d.zone,
 		hints = d.hints[:],
-		spawn = d.spawn,
-		exit  = d.exit,
+		spawn       = d.spawn,
+		exit        = d.exit,
+		secret_exit = d.secret_exit,
 	}
 	for c in d.checkpoints {
 		append(&g.level.checkpoints, Checkpoint{pos = c})
+	}
+	had := save_level(&g.save, d.ident).fruit
+	for f, i in d.fruit {
+		append(&g.level.fruit, Fruit {
+			home = f,
+			pos  = f,
+			had  = had & (1 << u64(i)) != 0,
+			kind = (i + d.number * 3) % FRUIT_KINDS,
+		})
 	}
 	g.bg_tint = {}
 	g.exit_anim = {}
@@ -109,7 +145,8 @@ level_enter :: proc(g: ^Game, wanted: int) {
 }
 
 level_has_next :: proc(g: ^Game) -> bool {
-	return g.level.index + 1 < len(g.levels)
+	_, ok := next_level(g, g.level.index)
+	return ok
 }
 
 // Puts every trap and creature back where the level file has it. Done on
@@ -133,6 +170,12 @@ level_restart :: proc(g: ^Game) {
 	for &c in g.level.checkpoints {
 		c.active = false
 	}
+	for &f in g.level.fruit {
+		f.state = .Waiting
+		f.pos = f.home
+	}
+	g.level.kept = 0
+	g.fruit_safe = 0
 	g.respawn = g.level.spawn
 	g.deaths = 0
 	g.level_time = 0
@@ -143,9 +186,70 @@ level_restart :: proc(g: ^Game) {
 	camera_snap(g)
 }
 
+// Fruit being carried is dropped when you die: back to where it was.
+level_drop_fruit :: proc(g: ^Game) {
+	for &f in g.level.fruit {
+		if f.state == .Following {
+			f.state = .Waiting
+			f.pos = f.home
+		}
+	}
+	g.fruit_safe = 0
+}
+
+@(private = "file")
+keep_carried_fruit :: proc(g: ^Game) {
+	for &f, i in g.level.fruit {
+		if f.state != .Following {
+			continue
+		}
+		f.state = .Kept
+		g.level.kept |= 1 << u64(i)
+		spawn_poof(g, &g.assets.fruit_got, f.pos)
+		play(&g.assets, .Refill)
+	}
+}
+
+@(private = "file")
+fruit_update :: proc(g: ^Game, dt: f32) {
+	p := &g.player
+	pr := player_rect(p^)
+	carried := 0
+	for &f in g.level.fruit {
+		switch f.state {
+		case .Waiting:
+			f.pos = f.home + {0, math.sin(g.time * 2.5 + f.home.x) * 2}
+			if !p.dead && rl.CheckCollisionCircleRec(f.pos, FRUIT_REACH / 2, pr) {
+				f.state = .Following
+				spawn_burst(g, f.pos, {255, 240, 200, 255}, 6, 60, 0.9)
+				play(&g.assets, .Menu_Move)
+			}
+		case .Following:
+			// A little train behind your head, each one a step further back.
+			carried += 1
+			behind: f32 = p.flip ? 1 : -1
+			want := player_centre(p^) + {behind * f32(8 + carried * 10), -14 - f32(carried) * 2}
+			f.pos += (want - f.pos) * min(1, dt * 7)
+		case .Kept:
+		}
+	}
+	// Standing still on rock (not a platform, which may be about to drop)
+	// makes it yours.
+	if carried > 0 && p.grounded && p.riding < 0 && !p.dead {
+		g.fruit_safe += dt
+		if g.fruit_safe >= FRUIT_SECURE {
+			keep_carried_fruit(g)
+			g.fruit_safe = 0
+		}
+	} else {
+		g.fruit_safe = 0
+	}
+}
+
 // Checkpoints are taken by touching them; the flag at the end finishes the
-// level.
-level_update :: proc(g: ^Game) {
+// level, and a secret exit finishes it too, opening a hidden level.
+level_update :: proc(g: ^Game, dt: f32) {
+	fruit_update(g, dt)
 	if g.player.dead {
 		return
 	}
@@ -160,28 +264,55 @@ level_update :: proc(g: ^Game) {
 		c.active = true
 		animator_restart(&c.anim, &g.assets.marks.flag_out)
 		g.respawn = c.pos
+		keep_carried_fruit(g)
 		spawn_burst(g, c.pos - {0, 20}, {255, 230, 140, 255}, 14, 90, 1.2)
 		play(&g.assets, .Checkpoint)
 		haptic(.Checkpoint)
 	}
 	if rl.CheckCollisionRecs(pr, flag_rect(g.level.exit, EXIT_REACH)) {
-		level_clear(g)
+		level_clear(g, false)
+	} else if g.level.secret_exit != {} && rl.CheckCollisionRecs(pr, flag_rect(g.level.secret_exit, EXIT_REACH)) {
+		level_clear(g, true)
 	}
 }
 
 @(private = "file")
-level_clear :: proc(g: ^Game) {
-	// The fastest time and the fewest deaths are kept apart: they will be
-	// separate medals, and need not come from the same clear.
-	best := &g.best[g.level.index]
-	if !best.cleared {
-		best^ = {cleared = true, time = g.level_time, deaths = g.deaths}
-	} else {
-		best.time = min(best.time, g.level_time)
-		best.deaths = min(best.deaths, g.deaths)
+level_clear :: proc(g: ^Game, secret: bool) {
+	keep_carried_fruit(g)
+	d := &g.levels[g.level.index]
+	index := g.level.index
+	medals_before := level_medals(g, index)
+	skins_before: [Skin]bool
+	for s in Skin {
+		skins_before[s] = skin_unlocked(g, s)
 	}
-	spawn_burst(g, g.level.exit - {0, 24}, {255, 214, 110, 255}, 30, 140, 1.5)
-	animator_restart(&g.exit_anim, &g.assets.marks.end_pressed)
+
+	save_record_clear(&g.save, d.ident, g.level_time, g.deaths, g.level.kept)
+	if secret && d.unlocks != "" {
+		save_find_secret(&g.save, d.unlocks)
+	}
+	save_write(&g.save)
+
+	medals := level_medals(g, index)
+	g.clear = Clear_Result {
+		secret     = secret,
+		medals     = medals,
+		new_medals = medals - medals_before,
+		fruit      = fruit_count(save_level(&g.save, d.ident).fruit),
+		fruit_of   = len(d.fruit),
+	}
+	for s in Skin {
+		if !skins_before[s] && skin_unlocked(g, s) {
+			g.clear.new_skin = true
+		}
+	}
+
+	at := secret ? g.level.secret_exit : g.level.exit
+	colour := secret ? rl.Color{200, 150, 255, 255} : rl.Color{255, 214, 110, 255}
+	spawn_burst(g, at - {0, 24}, colour, 30, 140, 1.5)
+	if !secret {
+		animator_restart(&g.exit_anim, &g.assets.marks.end_pressed)
+	}
 	play(&g.assets, .Clear)
 	haptic(.Clear)
 	game_set_state(g, .Cleared)
@@ -208,6 +339,26 @@ level_draw_flags :: proc(g: ^Game) {
 		animator_draw(g.exit_anim, g.level.exit, false)
 	} else {
 		anim_draw_frame(&m.end, 0, g.level.exit, false)
+	}
+	// The secret exit is the same trophy in another colour, pulsing.
+	if g.level.secret_exit != {} {
+		pulse := u8(200 + 55 * math.sin(g.time * 4))
+		anim_draw_frame(&m.end, 0, g.level.secret_exit, false, {190, 140, pulse, 255})
+	}
+}
+
+level_draw_fruit :: proc(g: ^Game) {
+	for f in g.level.fruit {
+		if f.state == .Kept {
+			continue
+		}
+		anim := &g.assets.fruit[f.kind]
+		frame := int(g.time / anim.frame_time) % anim.count
+		tint := rl.WHITE
+		if f.had && f.state == .Waiting {
+			tint = {255, 255, 255, 110} // kept on an earlier visit
+		}
+		anim_draw_frame(anim, frame, f.pos, false, tint)
 	}
 }
 

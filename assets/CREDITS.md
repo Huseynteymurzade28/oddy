@@ -6,7 +6,7 @@ the pixels are unchanged.
 
 | Folder | Pack | Author | Licence |
 |---|---|---|---|
-| `sprites/player/` (Virtual Guy, and the puffs you appear and vanish in) | [Pixel Adventure 1](https://opengameart.org/content/pixel-adventure-1) | Pixel Frog | CC-BY 4.0 |
+| `sprites/skins/` (Virtual Guy, Ninja Frog, Pink Man, Mask Dude), `sprites/player/` (the puffs you appear and vanish in), `sprites/fruit/` | [Pixel Adventure 1](https://opengameart.org/content/pixel-adventure-1) | Pixel Frog | CC-BY 4.0 |
 | `sprites/enemies/` (pig, slime, rhino, bat, ghost, bee, rocks) | [Pixel Adventure 2](https://opengameart.org/content/pixel-adventure-2) | Pixel Frog | CC-BY 4.0 |
 | `sprites/tileset.png` rows 12-23 (the earth, brick and wooden platforms), `sprites/traps/` (saw, spikes, trampoline, platforms, fan, fire, balloon, spiked head), `sprites/objects/checkpoint/` | [Pixel Adventure 1](https://opengameart.org/content/pixel-adventure-1) | Pixel Frog | CC-BY 4.0 |
 | `sounds/` | [The Essential Retro Video Game Sound Effects Collection](https://opengameart.org/content/512-sound-effects-8-bit-style) | Juhani Junkala | CC0 |

@@ -112,12 +112,14 @@ draw_end_screen :: proc(g: ^Game) {
 	panel.y += rise * rise * 30
 	draw_panel(g, panel)
 
-	title: cstring = LORE_CLEAR_TITLE
+	title: cstring = g.clear.secret ? LORE_SECRET_TITLE : LORE_CLEAR_TITLE
+	colour := g.clear.secret ? rl.Color{214, 160, 255, 255} : GOLD
+	light := g.clear.secret ? rl.Color{240, 214, 255, 255} : GOLD_LIGHT
 	tw := text_width(a, title, 16)
-	draw_text_outlined(a, title, {panel.x + (panel.width - tw) / 2, panel.y + 10}, 16, GOLD, GOLD_LIGHT)
+	draw_text_outlined(a, title, {panel.x + (panel.width - tw) / 2, panel.y + 10}, 16, colour, light)
 	centred_in(a, panel, g.level.name, panel.y + 32, 8, CREAM)
 
-	inlay := rl.Rectangle{panel.x + 12, panel.y + 48, panel.width - 24, 70}
+	inlay := rl.Rectangle{panel.x + 12, panel.y + 46, panel.width - 24, 88}
 	draw_inlay(g, inlay)
 	draw_clear_summary(g, inlay)
 
@@ -126,29 +128,52 @@ draw_end_screen :: proc(g: ^Game) {
 	}
 }
 
-// The time and the deaths big, with their names small under them, then the
-// best so far.
+// The time and the deaths big, the fruit beside them, and then the three
+// medals: lit if earned, with the ones earned just now marked NEW.
 @(private = "file")
 draw_clear_summary :: proc(g: ^Game, r: rl.Rectangle) {
 	a := &g.assets
-	best := g.best[g.level.index]
-	col_w := r.width / 2
-	columns := [2]struct {
+	c := g.clear
+	col_w := r.width / 3
+	columns := [3]struct {
 		value: cstring,
 		name:  cstring,
-	}{{fmt.ctprintf("%s", format_time(g.level_time)), "TIME"}, {fmt.ctprintf("%v", g.deaths), "DEATHS"}}
-	for c, i in columns {
-		cx := r.x + col_w * (f32(i) + 0.5)
-		draw_text(a, c.value, {cx - text_width(a, c.value, 16) / 2, r.y + 8}, 16, INK)
-		draw_text(a, c.name, {cx - text_width(a, c.name, 8) / 2, r.y + 26}, 8, {140, 104, 70, 255})
+	} {
+		{fmt.ctprintf("%s", format_time(g.level_time)), "TIME"},
+		{fmt.ctprintf("%v", g.deaths), "DEATHS"},
+		{fmt.ctprintf("%v/%v", c.fruit, c.fruit_of), "FRUIT"},
 	}
-	fill_rect(r.x + 10, r.y + 42, r.width - 20, 1, {180, 150, 110, 255})
-	centred_in(
-		a,
-		r,
-		fmt.ctprintf("BEST  %s  -  %v DEATHS", format_time(best.time), best.deaths),
-		r.y + 50,
-		8,
-		{140, 104, 70, 255},
-	)
+	for col, i in columns {
+		cx := r.x + col_w * (f32(i) + 0.5)
+		draw_text(a, col.value, {cx - text_width(a, col.value, 16) / 2, r.y + 6}, 16, INK)
+		draw_text(a, col.name, {cx - text_width(a, col.name, 8) / 2, r.y + 24}, 8, {140, 104, 70, 255})
+	}
+	fill_rect(r.x + 10, r.y + 37, r.width - 20, 1, {180, 150, 110, 255})
+
+	for medal, i in Medal {
+		cx := r.x + col_w * (f32(i) + 0.5)
+		pos := rl.Vector2{cx, r.y + 52}
+		earned := medal in c.medals
+		fresh := medal in c.new_medals
+		k: f32 = fresh ? 1 + 0.15 * math.sin(g.state_time * 10) : 1
+		fill_circle(pos + {0, 1}, 7 * k, {90, 60, 36, 120})
+		if earned {
+			fill_circle(pos, 7 * k, MEDAL_COLOURS[medal])
+			ring(pos, 7 * k, 1.2, {255, 255, 255, 200})
+		} else {
+			ring(pos, 7, 1.2, {170, 140, 110, 255})
+		}
+		name := MEDAL_NAMES[medal]
+		draw_text(a, name, {cx - text_width(a, name, 8) / 2, r.y + 62}, 8, earned ? INK : rl.Color{170, 140, 110, 255})
+		if fresh {
+			draw_text(a, "NEW", {cx + 9, r.y + 44}, 8, {200, 80, 60, 255})
+		}
+	}
+	if c.new_skin {
+		centred_in(a, r, "A NEW HERO WAITS ON THE MAP", r.y + 75, 8, {120, 70, 160, 255})
+	} else if c.secret {
+		centred_in(a, r, "A HIDDEN LEVEL OPENS ON THE MAP", r.y + 75, 8, {120, 70, 160, 255})
+	} else if level := g.levels[g.level.index]; level.par > 0 && .Time not_in c.medals {
+		centred_in(a, r, fmt.ctprintf("PAR TIME %s", format_time(level.par)), r.y + 75, 8, {140, 104, 70, 255})
+	}
 }

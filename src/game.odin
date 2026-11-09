@@ -10,6 +10,7 @@ is drawn in. Each of those lists has a file of its own next to this one.
 
 Game_State :: enum {
 	Title,
+	Map, // the world map: picking a level
 	Playing,
 	Paused,
 	Cleared, // reached the flag at the end of the level
@@ -25,7 +26,10 @@ Game :: struct {
 	state_time:   f32, // how long the current state has lasted
 	quit:         bool, // asked to leave from the title
 	levels:       [dynamic]Level_Data, // every level in the file, in order
-	best:         [dynamic]Level_Best, // one per level
+	save:         Save,
+	world_map:    World_Map,
+	clear:        Clear_Result, // what the last clear earned
+	fruit_safe:   f32, // how long you have stood on rock carrying fruit
 	level:        Level,
 	map_tiles:    Tilemap,
 	player:       Player,
@@ -56,8 +60,11 @@ Game :: struct {
 game_init :: proc(g: ^Game) {
 	assets_load(&g.assets)
 	touch_init(&g.touch)
+	save_load(&g.save)
+	assets_use_skin(&g.assets, g.save.skin)
 	levels_reload(g)
 	level_enter(g, 0)
+	world_map_init(g)
 	game_set_state(g, .Title)
 	rl.PlayMusicStream(g.assets.music)
 }
@@ -68,7 +75,7 @@ game_destroy :: proc(g: ^Game) {
 	tilemap_destroy(&g.map_tiles)
 	level_destroy(&g.level)
 	levels_destroy(&g.levels)
-	delete(g.best)
+	save_destroy(&g.save)
 	delete(g.sparks)
 	delete(g.poofs)
 	delete(g.things)
@@ -103,6 +110,9 @@ game_update :: proc(g: ^Game, dt: f32) {
 	}
 
 	switch g.state {
+	case .Map:
+		world_map_update(g, dt)
+		motes_update(g, dt)
 	case .Title, .Paused, .Cleared:
 		menu_update(g)
 		if g.state != .Paused {
@@ -134,7 +144,7 @@ game_update_play :: proc(g: ^Game, dt: f32) {
 	things_update(g, dt)
 	player_update(g, dt)
 	enemies_update(g, dt)
-	level_update(g)
+	level_update(g, dt)
 	sparks_update(g, dt)
 	poofs_update(g, dt)
 }
@@ -178,6 +188,7 @@ game_draw :: proc(g: ^Game) {
 	level_draw_flags(g)
 	things_draw(g)
 	enemies_draw(g)
+	level_draw_fruit(g)
 	player_draw(g.player, &g.assets)
 	poofs_draw(g)
 	rl.EndMode2D()

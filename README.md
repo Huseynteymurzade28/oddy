@@ -35,6 +35,25 @@ attached to its run on the [Actions](../../actions) page.
 The phone buzzes on a dash, when you land on a creature, at a checkpoint, on
 a death and at the end of a level.
 
+On the world map, tap a level to pick it and tap it again (or PLAY) to go;
+the arrows by the title turn to the next world, HERO picks who you play as.
+On a keyboard: left and right, `Q` `E` for worlds, `Enter`, `H`, `Esc`.
+
+## The map, fruit and medals
+
+- **Worlds and levels.** A level opens when the one before it is cleared; a
+  world opens when the last level of the world before it is. Your progress is
+  saved on the phone as you go.
+- **Fruit.** Hidden around each level. Touch one and it follows you; it is
+  only yours once you have stood on solid ground with it for a moment, or
+  reached a checkpoint or the end. Die first and it goes back.
+- **Medals.** Three per level, shown as dots under it on the map: finish
+  inside the par time, finish without dying, keep every fruit.
+- **Secret exits.** Some levels hide a second way out, a purple trophy. It
+  finishes the level and opens a hidden level on the map. There is one in 1-1.
+- **Heroes.** Virtual Guy from the start; Ninja Frog for 5 fruit, Pink Man for
+  6 medals, Mask Dude for beating a secret level.
+
 ## Movement
 
 - **The dash.** One per time in the air, back when you land; the body turns
@@ -70,7 +89,8 @@ boss you beat without a gun.
    on. Levels 1-1 to 1-3.
 4. **Feel** — done: squash and stretch, dust, puffs to vanish and arrive in,
    an iris on every death and respawn, CC0 sound effects, vibration.
-5. The world map, saving, fruit, medals, secret exits, skins.
+5. **The map** — done: the world map, saving, fruit, medals, secret exits
+   (1-1 hides one, into the secret level 1-S), four heroes.
 6. The fifteen levels and the three bosses.
 7. Music per world, more art, the name.
 
@@ -142,9 +162,16 @@ level you are on.
   Land on a creature to kill it: you bounce and get the dash back. Touching
   one any other way, or any trap, is a death. Everything is put back as it
   started each time you die.
-- **Level fields**: `Name`, shown when the level starts and on the clear card,
-  and `Zone` (`Mossy`, `Drowned`, `Ember`), which picks the colours, the light
-  and what drifts through the air.
+  Two more for the map: `Fruit`, a collectible (its look is picked by the
+  game), and `Secret_Exit`, a second way out whose `Unlocks` field names the
+  secret level it opens.
+- **Level identifiers** place a level on the map: `W2_4` is world 2, level 4
+  (1 to 5, the fifth is the boss); `W1_S1` is a secret level of world 1, shown
+  above the level whose secret exit names it.
+- **Level fields**: `Name`, shown when the level starts and on the clear card;
+  `Zone` (`Mossy`, `Drowned`, `Ember`), which picks the colours, the light and
+  what drifts through the air; and `Par`, the seconds to beat for the time
+  medal.
 
 Anything else in the file is ignored by the game. If the file cannot be read,
 the game starts in a bare room whose hint says why.
@@ -165,7 +192,10 @@ nothing but import cycles, so files are grouped by prefix instead.
 | `player.odin` | movement, jumps, the dash, death and respawn |
 | `physics.odin` | axis-separated AABB vs tiles, one-way platforms |
 | `ldtk.odin` | reading `levels/oddy.ldtk` |
-| `level.odin` | the level being played: checkpoints, the flag, hints, best clears |
+| `level.odin` | the level being played: checkpoints, the exits, fruit, hints |
+| `worldmap.odin` | the world map and the hero picker |
+| `progress.odin` | what is open and what is earned: unlocks, medals, heroes |
+| `save.odin` | the save file |
 | `things.odin` | traps and moving pieces |
 | `enemy.odin` | the creatures, and landing on them |
 | `tilemap.odin` | tile grid, spikes, materials, nine-slicing, drawing |
@@ -197,7 +227,8 @@ Odin or raylib package happens to ship.
 
 ## Credits
 
-Art from Pixel Frog's Pixel Adventure 1 and 2 (CC-BY 4.0), menus from Kenney's
+Art from Pixel Frog's Pixel Adventure 1 and 2 (CC-BY 4.0: heroes, creatures,
+traps, fruit), menus from Kenney's
 Pixel UI pack (CC0), sound effects from Juhani Junkala's Essential Retro Video
 Game Sound Effects Collection (CC0). The full list, including what is still to
 be replaced, is in `assets/CREDITS.md`.

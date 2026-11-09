@@ -35,6 +35,9 @@ Input :: struct {
 	dash:      bool, // pressed this frame
 	confirm:   bool, // a key that presses the marked menu button
 	nav:       int, // a key that moves the menu marker: -1 up, +1 down
+	nav_x:     int, // left or right on the world map: -1, +1
+	page:      int, // turn the world map's page: -1, +1
+	hero:      bool, // open the hero picker
 	pause:     bool, // pause in play; back out of a menu
 }
 
@@ -138,6 +141,11 @@ poll_desktop :: proc(g: ^Game) -> Input {
 	in_.dash = hit(.LEFT_SHIFT) || hit(.RIGHT_SHIFT) || hit(.X) || hit(.K)
 	in_.confirm = hit(.SPACE) || hit(.ENTER)
 	in_.nav = menu_nav()
+	if hit(.LEFT) || hit(.A) {in_.nav_x = -1}
+	if hit(.RIGHT) || hit(.D) {in_.nav_x = 1}
+	if hit(.Q) || hit(.PAGE_UP) {in_.page = -1}
+	if hit(.E) || hit(.PAGE_DOWN) {in_.page = 1}
+	in_.hero = hit(.H)
 	in_.pause = hit(.ESCAPE) || hit(.P)
 	return in_
 }
@@ -232,6 +240,8 @@ poll_touch :: proc(g: ^Game) -> Input {
 		if rl.IsKeyPressed(.LEFT_SHIFT) {in_.dash = true}
 		if rl.IsKeyPressed(.ENTER) {in_.confirm = true}
 		in_.nav = menu_nav()
+		if rl.IsKeyPressed(.LEFT) {in_.nav_x = -1}
+		if rl.IsKeyPressed(.RIGHT) {in_.nav_x = 1}
 	}
 	return in_
 }

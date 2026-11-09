@@ -23,6 +23,7 @@ Menu_Action :: enum {
 	Resume,
 	Restart,
 	Next,
+	To_Map,
 	Menu,
 	Quit,
 }
@@ -60,8 +61,8 @@ menu_panel :: proc(g: ^Game) -> rl.Rectangle {
 		return {(view.x - BUTTON_W - 40) / 2, 46, BUTTON_W + 40, 156}
 	case .Cleared:
 		w := min(f32(360), view.x - 16)
-		return {(view.x - w) / 2, 36, w, 168}
-	case .Playing:
+		return {(view.x - w) / 2, 22, w, 190}
+	case .Playing, .Map:
 	}
 	return {}
 }
@@ -100,7 +101,7 @@ menu_items :: proc(g: ^Game) -> []Menu_Item {
 			{
 				{label = "RESUME", colour = .Green, action = .Resume},
 				{label = "RESTART", colour = .Yellow, action = .Restart},
-				{label = "MENU", colour = .Blue, action = .Menu},
+				{label = "MAP", colour = .Blue, action = .To_Map},
 			},
 		)
 	case .Cleared:
@@ -110,7 +111,7 @@ menu_items :: proc(g: ^Game) -> []Menu_Item {
 			append(&row, Menu_Item{label = "NEXT", colour = .Green, action = .Next})
 		}
 		append(&row, Menu_Item{label = "AGAIN", colour = level_has_next(g) ? .Yellow : .Green, action = .Restart})
-		append(&row, Menu_Item{label = "MENU", colour = .Blue, action = .Menu})
+		append(&row, Menu_Item{label = "MAP", colour = .Blue, action = .To_Map})
 		gap: f32 = 8
 		n := f32(len(row))
 		w: f32 = min(BUTTON_W, (panel.width - 24 - gap * (n - 1)) / n)
@@ -121,7 +122,7 @@ menu_items :: proc(g: ^Game) -> []Menu_Item {
 			it.rect = {x + f32(i) * (w + gap), y, w, BUTTON_H}
 			append(&items, it)
 		}
-	case .Playing:
+	case .Playing, .Map:
 	}
 	return items[:]
 }
@@ -207,8 +208,7 @@ activate :: proc(g: ^Game, action: Menu_Action) {
 	switch action {
 	case .None:
 	case .Play:
-		level_enter(g, 0)
-		game_set_state(g, .Playing)
+		world_map_open(g, g.world_map.selected)
 	case .Resume:
 		game_set_state(g, .Playing)
 	case .How_To:
@@ -221,8 +221,12 @@ activate :: proc(g: ^Game, action: Menu_Action) {
 		level_restart(g)
 		game_set_state(g, .Playing)
 	case .Next:
-		level_enter(g, g.level.index + 1)
-		game_set_state(g, .Playing)
+		if next, ok := next_level(g, g.level.index); ok {
+			level_enter(g, next)
+			game_set_state(g, .Playing)
+		}
+	case .To_Map:
+		world_map_open(g, g.level.index)
 	case .Menu:
 		level_enter(g, 0)
 		game_set_state(g, .Title)

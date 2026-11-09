@@ -101,6 +101,8 @@ hud_draw :: proc(g: ^Game) {
 	switch g.state {
 	case .Title:
 		draw_title_screen(g)
+	case .Map:
+		world_map_draw(g)
 	case .Playing:
 		draw_iris(g)
 		draw_stats(g)

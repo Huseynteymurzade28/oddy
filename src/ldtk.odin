@@ -40,8 +40,15 @@ Hint :: struct {
 // One level as it is in the file. `level.odin` builds the live level from it.
 Level_Data :: struct {
 	ident:       string,
+	world:       int, // from the identifier: "W2_4" is world 2, level 4
+	number:      int,
+	secret:      bool, // "W1_S1": a level found through a secret exit
 	name:        cstring,
 	zone:        Zone,
+	par:         f32, // seconds for the time medal; 0 for none
+	fruit:       [dynamic]rl.Vector2,
+	secret_exit: rl.Vector2, // zero if the level has none
+	unlocks:     string, // the level that secret exit opens
 	width:       int, // cells
 	height:      int,
 	tiles:       []Tile,
@@ -73,6 +80,8 @@ level_data_destroy :: proc(d: ^Level_Data) {
 	}
 	delete(d.hints)
 	delete(d.things)
+	delete(d.fruit)
+	delete(d.unlocks)
 	d^ = {}
 }
 
@@ -120,6 +129,7 @@ read_level :: proc(lv: json.Value) -> (d: Level_Data, ok: bool) {
 	d.ident = strings.clone(str(get(lv, "identifier")))
 	d.name = strings.clone_to_cstring(d.ident)
 	d.zone = .Mossy
+	d.world, d.number, d.secret = parse_ident(d.ident)
 
 	for f in arr(get(lv, "fieldInstances")) {
 		value := str(get(f, "__value"))
@@ -129,6 +139,8 @@ read_level :: proc(lv: json.Value) -> (d: Level_Data, ok: bool) {
 				delete(d.name)
 				d.name = strings.clone_to_cstring(value)
 			}
+		case "Par":
+			d.par = flt(get(f, "__value"))
 		case "Zone":
 			for z in Zone {
 				if fmt.tprint(z) == value {
@@ -180,6 +192,16 @@ read_level :: proc(lv: json.Value) -> (d: Level_Data, ok: bool) {
 					append(&d.checkpoints, pos)
 				case "Exit":
 					d.exit = pos
+				case "Fruit":
+					append(&d.fruit, pos)
+				case "Secret_Exit":
+					d.secret_exit = pos
+					for f in arr(get(e, "fieldInstances")) {
+						if str(get(f, "__identifier")) == "Unlocks" {
+							delete(d.unlocks)
+							d.unlocks = strings.clone(str(get(f, "__value")))
+						}
+					}
 				case "Hint":
 					text := ""
 					for f in arr(get(e, "fieldInstances")) {
@@ -193,6 +215,40 @@ read_level :: proc(lv: json.Value) -> (d: Level_Data, ok: bool) {
 		}
 	}
 	return
+}
+
+// "W2_4" -> world 2, level 4; "W1_S1" -> world 1, secret level 1. Anything
+// else is world 1, numbered 0, which sorts it ahead of the real levels.
+@(private = "file")
+parse_ident :: proc(ident: string) -> (world, number: int, secret: bool) {
+	world = 1
+	if len(ident) < 4 || ident[0] != 'W' {
+		return
+	}
+	under := strings.index_byte(ident, '_')
+	if under < 2 {
+		return
+	}
+	world = max(1, atoi(ident[1:under]))
+	rest := ident[under + 1:]
+	if len(rest) > 0 && rest[0] == 'S' {
+		secret = true
+		rest = rest[1:]
+	}
+	number = atoi(rest)
+	return
+}
+
+@(private = "file")
+atoi :: proc(s: string) -> int {
+	n := 0
+	for c in s {
+		if c < '0' || c > '9' {
+			break
+		}
+		n = n * 10 + int(c - '0')
+	}
+	return n
 }
 
 @(private = "file")
