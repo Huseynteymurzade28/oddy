@@ -390,6 +390,7 @@ assets_use_skin :: proc(a: ^Assets, skin: Skin) {
 // The same sound at a chosen pitch: a run of gems climbs the scale.
 play_pitched :: proc(a: ^Assets, s: Sfx, pitch: f32) {
 	rl.SetSoundPitch(a.sfx[s], pitch)
+	rl.SetSoundVolume(a.sfx[s], SFX_FILES[s].volume * sound_scale)
 	rl.PlaySound(a.sfx[s])
 }
 
@@ -397,5 +398,6 @@ play :: proc(a: ^Assets, s: Sfx) {
 	if s in SFX_VARY {
 		rl.SetSoundPitch(a.sfx[s], rand.float32_range(0.93, 1.07))
 	}
+	rl.SetSoundVolume(a.sfx[s], SFX_FILES[s].volume * sound_scale)
 	rl.PlaySound(a.sfx[s])
 }

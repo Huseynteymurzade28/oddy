@@ -85,6 +85,10 @@ draw_title_screen :: proc(g: ^Game) {
 		draw_menu(g)
 		return
 	}
+	if g.ui.settings {
+		draw_settings(g)
+		return
+	}
 
 	// The name drops in, overshoots a little, settles, and then bobs gently.
 	t := min(g.state_time * 2.2, 1)
@@ -126,9 +130,27 @@ draw_how_to :: proc(g: ^Game) {
 	}
 }
 
+// The settings card, over the title or the pause card.
+draw_settings :: proc(g: ^Game) {
+	a := &g.assets
+	panel := menu_panel(g)
+	draw_panel(g, panel)
+	draw_text_outlined(a, "SETTINGS", {panel.x + (panel.width - text_width(a, "SETTINGS", 16)) / 2, panel.y + 7}, 16, GOLD, GOLD_LIGHT)
+	draw_menu(g)
+}
+
 draw_pause_screen :: proc(g: ^Game) {
 	a := &g.assets
 	draw_shade(110, 190)
+	if g.ui.how_to {
+		draw_how_to(g)
+		draw_menu(g)
+		return
+	}
+	if g.ui.settings {
+		draw_settings(g)
+		return
+	}
 	panel := menu_panel(g)
 	draw_panel(g, panel)
 	draw_text_outlined(a, "PAUSED", {panel.x + (panel.width - text_width(a, "PAUSED", 16)) / 2, panel.y + 9}, 16, GOLD, GOLD_LIGHT)

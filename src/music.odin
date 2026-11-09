@@ -92,7 +92,7 @@ music_update :: proc(g: ^Game, dt: f32) {
 			rl.StopMusicStream(m.tracks[t]) // the next time it plays, from the top
 			continue
 		}
-		rl.SetMusicVolume(m.tracks[t], m.volume[t] * MUSIC_VOLUME * duck)
+		rl.SetMusicVolume(m.tracks[t], m.volume[t] * MUSIC_VOLUME * duck * music_scale)
 		rl.UpdateMusicStream(m.tracks[t])
 	}
 }

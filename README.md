@@ -35,6 +35,10 @@ attached to its run on the [Actions](../../actions) page.
 The phone buzzes on a dash, when you land on a creature, at a checkpoint, on
 a death and at the end of a level.
 
+**Settings** (on the title and the pause card): music and sound volume,
+vibration, and two comforts for a gentler game: a slower game speed (down to
+55%, the clock slows with it) and a dash that never runs out.
+
 On the world map, tap a level to pick it and tap it again (or PLAY) to go;
 the arrows by the title turn to the next world, HERO picks who you play as.
 On a keyboard: left and right, `Q` `E` for worlds, `Enter`, `H`, `Esc`.

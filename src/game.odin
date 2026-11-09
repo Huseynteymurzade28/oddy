@@ -70,6 +70,7 @@ game_init :: proc(g: ^Game) {
 	assets_load(&g.assets)
 	touch_init(&g.touch)
 	save_load(&g.save)
+	settings_apply(&g.save.settings)
 	assets_use_skin(&g.assets, g.save.skin)
 	levels_reload(g)
 	level_enter(g, 0)
@@ -146,7 +147,8 @@ game_update :: proc(g: ^Game, dt: f32) {
 			chips_update(g, dt)
 		}
 	case .Playing:
-		game_update_play(g, dt)
+		// The comfort setting slows the whole world down, clock included.
+		game_update_play(g, dt * game_speed(g))
 		motes_update(g, dt)
 	}
 
@@ -194,6 +196,7 @@ game_set_state :: proc(g: ^Game, state: Game_State) {
 	g.ui.focus = 0
 	g.ui.press = -1
 	g.ui.how_to = false
+	g.ui.settings = false
 	// The pointer is only for the menus.
 	when !TOUCH_CONTROLS {
 		if state == .Playing {

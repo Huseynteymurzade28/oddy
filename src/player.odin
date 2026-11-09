@@ -219,6 +219,9 @@ player_update :: proc(g: ^Game, dt: f32) {
 	r := player_rect(p^)
 
 	// --- dash ----------------------------------------------------------------
+	if g.save.settings.endless_dash && p.dash_time <= 0 {
+		p.dashes = 1 // the comfort setting: the dash never runs out
+	}
 	if p.dash_buffer > 0 && p.dashes > 0 && p.dash_time <= 0 {
 		p.dash_buffer = 0
 		p.dashes -= 1

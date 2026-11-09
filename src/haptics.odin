@@ -34,6 +34,9 @@ when IS_MOBILE {
 	}
 
 	haptic :: proc(h: Haptic) {
+		if !vibration_on {
+			return
+		}
 		v := HAPTICS[h]
 		oddy_vibrate(v[0], v[1])
 	}

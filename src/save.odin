@@ -30,7 +30,8 @@ Save :: struct {
 	version: int,
 	skin:    Skin,
 	levels:  map[string]Level_Save, // by LDtk identifier, e.g. "W1_3"
-	secrets: map[string]bool, // secret levels whose way in has been found
+	secrets:  map[string]bool, // secret levels whose way in has been found
+	settings: Settings,
 }
 
 save_destroy :: proc(s: ^Save) {

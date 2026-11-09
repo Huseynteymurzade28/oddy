@@ -1,5 +1,6 @@
 package game
 
+import "core:fmt"
 import "core:math"
 import rl "../libs/raylib"
 
@@ -26,6 +27,12 @@ Menu_Action :: enum {
 	To_Map,
 	Menu,
 	Quit,
+	Settings,
+	Set_Music,
+	Set_Sound,
+	Set_Vibration,
+	Set_Speed,
+	Set_Dash,
 }
 
 Menu_Item :: struct {
@@ -38,7 +45,8 @@ Menu_Item :: struct {
 Ui_State :: struct {
 	focus:  int, // the keyboard's marker
 	press:  int, // the button the pointer went down on, or -1
-	how_to: bool, // the title is showing the how-to-play board
+	how_to:   bool, // showing the how-to-play board
+	settings: bool, // showing the settings card
 }
 
 BUTTON_W :: 140.0
@@ -48,8 +56,20 @@ BUTTON_GAP :: 6.0
 SLICE :: 6 // source pixels of border on each side of the 48px art
 
 // Where the board behind the buttons goes, for the current screen.
+SETTINGS_ROW_H :: 21.0
+SETTINGS_ROW_GAP :: 3.0
+SETTINGS_ROWS :: 7
+
 menu_panel :: proc(g: ^Game) -> rl.Rectangle {
 	view := view_size()
+	if g.ui.settings && !g.ui.how_to {
+		h: f32 = SETTINGS_ROWS * (SETTINGS_ROW_H + SETTINGS_ROW_GAP) + 34
+		return {(view.x - BUTTON_W - 60) / 2, (PIXEL_HEIGHT - h) / 2, BUTTON_W + 60, h}
+	}
+	if g.ui.how_to && g.state == .Paused {
+		w := min(f32(380), view.x - 16)
+		return {(view.x - w) / 2, 26, w, 196}
+	}
 	switch g.state {
 	case .Title:
 		if g.ui.how_to {
@@ -58,7 +78,7 @@ menu_panel :: proc(g: ^Game) -> rl.Rectangle {
 		}
 		return {(view.x - BUTTON_W - 24) / 2, 98, BUTTON_W + 24, 3 * BUTTON_H + 2 * BUTTON_GAP + 22}
 	case .Paused:
-		return {(view.x - BUTTON_W - 40) / 2, 46, BUTTON_W + 40, 156}
+		return {(view.x - BUTTON_W - 40) / 2, 34, BUTTON_W + 40, 186}
 	case .Cleared:
 		w := min(f32(360), view.x - 16)
 		return {(view.x - w) / 2, 22, w, 190}
@@ -77,6 +97,30 @@ menu_items :: proc(g: ^Game) -> []Menu_Item {
 			append(items, it)
 		}
 	}
+	if g.ui.how_to && g.state == .Paused {
+		column(&items, panel, panel.y + panel.height - BUTTON_H - 10, {{label = "BACK", colour = .Yellow, action = .Back}})
+		return items[:]
+	}
+	if g.ui.settings && !g.ui.how_to {
+		s := g.save.settings
+		on_off :: proc(b: bool) -> string {return b ? "ON" : "OFF"}
+		rows := [SETTINGS_ROWS]Menu_Item {
+			{label = fmt.ctprintf("MUSIC  %v%%", s.music), colour = .Blue, action = .Set_Music},
+			{label = fmt.ctprintf("SOUND  %v%%", s.sound), colour = .Blue, action = .Set_Sound},
+			{label = fmt.ctprintf("VIBRATION  %s", on_off(s.vibration)), colour = .Blue, action = .Set_Vibration},
+			{label = fmt.ctprintf("GAME SPEED  %v%%", s.speed), colour = .Green, action = .Set_Speed},
+			{label = fmt.ctprintf("ENDLESS DASH  %s", on_off(s.endless_dash)), colour = .Green, action = .Set_Dash},
+			{label = "HOW TO PLAY", colour = .Blue, action = .How_To},
+			{label = "BACK", colour = .Yellow, action = .Back},
+		}
+		w: f32 = BUTTON_W + 36
+		for item, i in rows {
+			it := item
+			it.rect = {panel.x + (panel.width - w) / 2, panel.y + 28 + f32(i) * (SETTINGS_ROW_H + SETTINGS_ROW_GAP), w, SETTINGS_ROW_H}
+			append(&items, it)
+		}
+		return items[:]
+	}
 	switch g.state {
 	case .Title:
 		if g.ui.how_to {
@@ -88,7 +132,7 @@ menu_items :: proc(g: ^Game) -> []Menu_Item {
 				panel.y + 11,
 				{
 					{label = "PLAY", colour = .Green, action = .Play},
-					{label = "HELP", colour = .Blue, action = .How_To},
+					{label = "SETTINGS", colour = .Blue, action = .Settings},
 					{label = "QUIT", colour = .Red, action = .Quit},
 				},
 			)
@@ -101,6 +145,7 @@ menu_items :: proc(g: ^Game) -> []Menu_Item {
 			{
 				{label = "RESUME", colour = .Green, action = .Resume},
 				{label = "RESTART", colour = .Yellow, action = .Restart},
+				{label = "SETTINGS", colour = .Blue, action = .Settings},
 				{label = "MAP", colour = .Blue, action = .To_Map},
 			},
 		)
@@ -161,7 +206,7 @@ menu_update :: proc(g: ^Game) {
 	// Back, or Escape: close the board, go on playing, or leave.
 	if g.input.pause {
 		switch {
-		case g.state == .Title && ui.how_to:
+		case ui.how_to || ui.settings:
 			activate(g, .Back)
 		case g.state == .Paused:
 			activate(g, .Resume)
@@ -215,8 +260,19 @@ activate :: proc(g: ^Game, action: Menu_Action) {
 		g.ui.how_to = true
 		g.ui.focus = 0
 	case .Back:
-		g.ui.how_to = false
-		g.ui.focus = 1
+		// The how-to board goes back to the settings card, that to the menu.
+		if g.ui.how_to {
+			g.ui.how_to = false
+			g.ui.focus = 5
+		} else {
+			g.ui.settings = false
+			g.ui.focus = g.state == .Paused ? 2 : 1
+		}
+	case .Settings:
+		g.ui.settings = true
+		g.ui.focus = 0
+	case .Set_Music, .Set_Sound, .Set_Vibration, .Set_Speed, .Set_Dash:
+		settings_step(g, action)
 	case .Restart:
 		level_restart(g)
 		game_set_state(g, .Playing)
@@ -290,8 +346,11 @@ draw_menu :: proc(g: ^Game) {
 		tint := ready ? rl.WHITE : rl.Color{255, 255, 255, 140}
 		draw_nine(tex, r, tint)
 
+		// Big letters on full-size buttons that have room for them; the
+		// shorter rows of the settings card always use the small size, so
+		// the card reads as one list.
 		size: f32 = 16
-		if text_width(a, item.label, size) > r.width - 12 {
+		if r.height < BUTTON_H || text_width(a, item.label, size) > r.width - 12 {
 			size = 8
 		}
 		tw := text_width(a, item.label, size)

@@ -80,6 +80,9 @@ when DEV_SHOTS {
 		game_set_state(g, .Paused)
 		frames(g, 20)
 		shot(g, "09_pause")
+		g.ui.settings = true
+		frames(g, 5)
+		shot(g, "10_settings")
 	}
 
 	dev_shots_main :: proc() {
