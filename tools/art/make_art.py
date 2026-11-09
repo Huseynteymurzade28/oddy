@@ -4,6 +4,7 @@
     terrain/<world>.png          the ground, platforms, liquid, crates (terrain.py)
     background/<world>_<n>.png   the five parallax layers (backgrounds.py)
     fx/gem.png, fx/critters.png  gems, butterflies and birds (sprites.py)
+    android/res/mipmap-*         the launcher icon (icon.py)
 
     python3 tools/art/make_art.py
 
@@ -17,6 +18,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import backgrounds  # noqa: E402
+import icon  # noqa: E402
 import sprites  # noqa: E402
 import terrain  # noqa: E402
 
@@ -35,3 +37,6 @@ os.makedirs(os.path.join(OUT, 'fx'), exist_ok=True)
 sprites.gem().save(os.path.join(OUT, 'fx', 'gem.png'), optimize=True)
 sprites.critters().save(os.path.join(OUT, 'fx', 'critters.png'), optimize=True)
 print('drew the gem and the critters')
+
+icon.make()
+print('drew the launcher icon')

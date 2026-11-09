@@ -49,12 +49,14 @@ Game :: struct {
 	motes:        [dynamic]Mote, // what drifts through the air
 	liquid_glows: [dynamic]rl.Vector2, // points along lava that light the level
 	lighting:     Lighting,
+	music:        Music_Player,
 	state:        Game_State,
 	time:         f32, // wall clock, keeps running on menus
 	shake:        f32,
 	freeze:       f32, // a few hundredths of a second where nothing moves
 	camera:       rl.Camera2D,
 	camera_lead:  f32, // how far the camera runs ahead, eased toward the speed
+	fade:         f32, // the fade from dark after a change of screen
 	exit_anim:    Animator, // the trophy at the end, once pressed
 
 	// this attempt at the level
@@ -73,11 +75,12 @@ game_init :: proc(g: ^Game) {
 	level_enter(g, 0)
 	world_map_init(g)
 	game_set_state(g, .Title)
-	rl.PlayMusicStream(g.assets.music)
+	music_load(&g.music)
 }
 
 game_destroy :: proc(g: ^Game) {
 	assets_unload(&g.assets)
+	music_unload(&g.music)
 	touch_destroy(&g.touch)
 	tilemap_destroy(&g.map_tiles)
 	level_destroy(&g.level)
@@ -105,7 +108,8 @@ game_destroy :: proc(g: ^Game) {
 game_update :: proc(g: ^Game, dt: f32) {
 	g.time += dt
 	g.state_time += dt
-	rl.UpdateMusicStream(g.assets.music)
+	g.fade = max(0, g.fade - dt)
+	music_update(g, dt)
 	g.input = input_poll(g)
 
 	// F5 reads the levels file again and restarts the level you are on, so
@@ -173,7 +177,14 @@ game_update_play :: proc(g: ^Game, dt: f32) {
 	chips_update(g, dt)
 }
 
+FADE_TIME :: 0.3
+
 game_set_state :: proc(g: ^Game, state: Game_State) {
+	// Between the title, the map and a level, a quick fade from dark; into
+	// and out of the pause card the change is instant.
+	if (state == .Map || state == .Title || (state == .Playing && g.state != .Paused)) && state != g.state {
+		g.fade = FADE_TIME
+	}
 	g.state = state
 	g.state_time = 0
 	g.ui.focus = 0
@@ -238,5 +249,9 @@ game_draw :: proc(g: ^Game) {
 	rl.EndMode2D()
 
 	hud_draw(g)
+	if g.fade > 0 {
+		k := g.fade / FADE_TIME
+		rl.DrawRectangle(0, 0, rl.GetScreenWidth(), rl.GetScreenHeight(), {14, 10, 22, u8(255 * k * k)})
+	}
 	rl.EndDrawing()
 }

@@ -139,7 +139,11 @@ boss you beat without a gun.
    (1-1 hides one, into the secret level 1-S), four heroes.
 6. **Levels and bosses** — done: three worlds of five levels, a secret
    level, swimming, geysers, and three bosses.
-7. Music per world, more art, the name.
+7. **Polish** — done: a track per world and one for the bosses
+   (crossfading, quieter while paused), a story told in a few lines on the
+   map and at the very end, fades between screens, and a launcher icon of
+   the hero dashing over the meadow.
+8. The name.
 
 ## Building
 
@@ -246,6 +250,7 @@ nothing but import cycles, so files are grouped by prefix instead.
 | `worldmap.odin` | the world map and the hero picker |
 | `progress.odin` | what is open and what is earned: unlocks, medals, heroes |
 | `save.odin` | the save file |
+| `music.odin` | the tracks and the crossfade between them |
 | `things.odin` | traps and moving pieces |
 | `enemy.odin` | the creatures, and landing on them |
 | `boss.odin` | the bosses, their floor ripples, the boss bar |
@@ -281,7 +286,8 @@ Odin or raylib package happens to ship.
 ## Credits
 
 The worlds themselves (ground, grass and flowers, bridges, water, skies and
-backdrops) are drawn for Oddy by `tools/art/make_art.py`. Characters and traps
+backdrops) and the launcher icon are drawn for Oddy by `tools/art/make_art.py`.
+Music by Juhani Junkala (CC0). Characters and traps
 are from Pixel Frog's Pixel Adventure 1 and 2 (CC-BY 4.0: heroes, creatures,
 traps, fruit), menus from Kenney's
 Pixel UI pack (CC0), sound effects from Juhani Junkala's Essential Retro Video

@@ -18,11 +18,9 @@ the pack's one-frame hit poses repeated with a pixel or two of sideways shake,
 so they can play as animations. The sounds are
 renamed for what they do in the game (`jump.wav` was `sfx_movement_jump1.wav`).
 
-**TODO — source unknown, to be found or replaced before a store release:**
+| `music/` (menu, moss, drowned and ember: [Chiptune Adventures](https://opengameart.org/content/4-chiptunes-adventure); boss: [Epic Boss Battle](https://opengameart.org/content/boss-battle-music)) | Chiptune Adventures, Epic Boss Battle | Juhani Junkala | CC0 |
 
-| Folder | Pack | Author | Licence |
-|---|---|---|---|
-| `music/theme.mp3` | | | |
+Every asset in the game now has a known source and licence.
 
 ## Drawn for Oddy
 
@@ -39,6 +37,7 @@ birds) are this project's own, drawn pixel by pixel by
   that folder are Odin's `vendor:raylib` bindings (Odin is BSD-3-Clause), copied
   with only the library paths changed.
 - The torches, roots, stalactites, crystals, mushrooms, drifting motes, the
-  lighting, sun shafts, the arrow shooters and arrows, the fan's air, the touch controls and the Android
-  launcher icon (Virtual Guy on a drawn sky) are drawn in code for this
-  project; no third-party art was added for them.
+  lighting, sun shafts, the arrow shooters and arrows, the fan's air, the
+  geysers, the bosses' ripples and rocks, and the touch controls are drawn in
+  code for this project. The Android launcher icon is drawn by
+  `tools/art/icon.py` from the game's own backdrop and its hero sprite.

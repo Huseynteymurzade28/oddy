@@ -376,6 +376,9 @@ world_map_draw :: proc(g: ^Game) {
 	}
 	title_half = text_width(a, title, size) / 2
 	draw_text_outlined_centered(a, title, size == 16 ? 10 : 14, size, GOLD, GOLD_LIGHT)
+	for line, i in WORLD_BLURBS[m.world - 1] {
+		draw_text_outlined_centered(a, line, 30 + f32(i) * 10, 8, {240, 236, 250, 230})
+	}
 	if m.world > 1 {
 		draw_arrow_button(g, button_rect(.Prev_World), -1)
 	}
@@ -539,7 +542,7 @@ draw_totals :: proc(g: ^Game) {
 	view := view_size()
 	t := progress_totals(g)
 	s := hud_scale()
-	y: f32 = 32
+	y: f32 = 50 // under the world's blurb
 	anim := &a.fruit[0]
 	anim_draw_frame(anim, int(g.time / anim.frame_time) % anim.count, {(view.x - 58) * s, (y + 4) * s}, false, rl.WHITE, s * 0.6)
 	draw_text_shadow(a, fmt.ctprintf("%v", t.fruit), {view.x - 50, y}, 8, rl.RAYWHITE)

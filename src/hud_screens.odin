@@ -146,12 +146,14 @@ draw_end_screen :: proc(g: ^Game) {
 	panel.y += rise * rise * 30
 	draw_panel(g, panel)
 
-	title: cstring = g.clear.secret ? LORE_SECRET_TITLE : LORE_CLEAR_TITLE
+	d := &g.levels[g.level.index]
+	finale := d.world == WORLDS && d.number == LEVELS_PER_WORLD && !d.secret
+	title: cstring = g.clear.secret ? LORE_SECRET_TITLE : (finale ? LORE_END_TITLE : LORE_CLEAR_TITLE)
 	colour := g.clear.secret ? rl.Color{214, 160, 255, 255} : GOLD
 	light := g.clear.secret ? rl.Color{240, 214, 255, 255} : GOLD_LIGHT
 	tw := text_width(a, title, 16)
 	draw_text_outlined(a, title, {panel.x + (panel.width - tw) / 2, panel.y + 10}, 16, colour, light)
-	centred_in(a, panel, g.level.name, panel.y + 32, 8, CREAM)
+	centred_in(a, panel, finale ? LORE_END_LINE : g.level.name, panel.y + 32, 8, CREAM)
 
 	inlay := rl.Rectangle{panel.x + 12, panel.y + 46, panel.width - 24, 88}
 	draw_inlay(g, inlay)

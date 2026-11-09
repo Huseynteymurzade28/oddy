@@ -148,7 +148,6 @@ Assets :: struct {
 	font:    rl.Font,
 	ui:      Ui_Art,
 	sfx:     [Sfx]rl.Sound,
-	music:   rl.Music,
 }
 
 BG_LAYERS :: 5
@@ -315,9 +314,6 @@ assets_load :: proc(a: ^Assets) {
 	a.ui.panel = rl.LoadTexture("assets/ui/panel.png")
 	a.ui.inlay = rl.LoadTexture("assets/ui/panel_inlay.png")
 
-	a.music = rl.LoadMusicStream("assets/music/theme.mp3")
-	a.music.looping = true
-	rl.SetMusicVolume(a.music, 0.30)
 }
 
 // Unloads a set of animations, skipping anything already gone: several
@@ -389,7 +385,6 @@ assets_unload :: proc(a: ^Assets) {
 	for s in Sfx {
 		rl.UnloadSound(a.sfx[s])
 	}
-	rl.UnloadMusicStream(a.music)
 }
 
 // Puts on a hero. Everything that animates the player points into
