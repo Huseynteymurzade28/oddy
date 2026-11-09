@@ -62,6 +62,7 @@ Game :: struct {
 	// this attempt at the level
 	respawn:      rl.Vector2, // the last checkpoint touched, or the start
 	deaths:       int,
+	deaths_here:  int, // since the last lantern, for the kind words
 	level_time:   f32,
 	level_intro:  f32, // the level's name, fading out
 }

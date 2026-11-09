@@ -110,6 +110,7 @@ Player :: struct {
 
 	riding:       int, // the platform in `g.things` stood on, or -1
 	combo:        int, // bounces off creatures and trampolines since last on the ground
+	still_time:   f32, // how long Lumi has stood still with nothing pressed
 	in_water:     bool,
 
 	dead:         bool,
@@ -219,6 +220,11 @@ player_update :: proc(g: ^Game, dt: f32) {
 	r := player_rect(p^)
 
 	// --- dash ----------------------------------------------------------------
+	if in_.move == 0 && !in_.jump && !in_.dash && in_.move_y == 0 && p.grounded && abs(p.vel.x) < 1 {
+		p.still_time += dt
+	} else {
+		p.still_time = 0
+	}
 	if g.save.settings.endless_dash && p.dash_time <= 0 {
 		p.dashes = 1 // the comfort setting: the dash never runs out
 	}
@@ -694,6 +700,30 @@ player_respawn :: proc(g: ^Game) {
 	spawn_poof(g, &g.assets.player.appear, g.player.pos)
 	spawn_burst(g, player_centre(g.player), {200, 230, 255, 255}, 12, 80, 1.0)
 	play(&g.assets, .Respawn)
+	encourage(g)
+}
+
+// A kind word now and then when one stretch keeps beating you, and a pointer
+// to the comfort settings if it goes on.
+@(private = "file")
+encourage :: proc(g: ^Game) {
+	g.deaths_here += 1
+	words: cstring
+	switch g.deaths_here {
+	case 6:
+		words = "TAKE YOUR TIME"
+	case 12:
+		words = "YOU ARE GETTING CLOSER"
+	case 20:
+		words = "ALMOST THERE"
+	case 28:
+		words = "TIP: SETTINGS CAN SLOW THE GAME DOWN"
+	case 40:
+		words = "BREATHE. YOU'VE GOT THIS"
+	}
+	if words != nil {
+		spawn_popup(g, player_centre(g.player) - {0, 26}, {255, 236, 200, 255}, strings.clone_to_cstring(string(words)), 2.6)
+	}
 }
 
 // Lumi's own glow, drawn over the lit world so it shows even in daylight: a
@@ -724,6 +754,20 @@ player_draw_glow :: proc(g: ^Game) {
 		rl.DrawCircleV(pos, 1.3, mote)
 		mote.a /= 3
 		rl.DrawCircleV(pos, 3, mote)
+	}
+	if p.still_time > 4 {
+		// Left alone, Lumi dozes off.
+		for i in 0 ..< 3 {
+			phase := f32(i) / 3 + g.time * 0.45
+			phase -= math.floor(phase)
+			pos := c + {6 + phase * 10 + math.sin(phase * 6) * 2, -12 - phase * 16}
+			size: f32 = 8 + phase * 6
+			alpha := u8(220 * math.sin(phase * math.PI) * clamp(p.still_time - 4, 0, 1))
+			rl.EndBlendMode()
+			rl.DrawTextEx(g.assets.font, "z", pos + {0, 1}, size, 1, {40, 26, 34, alpha / 2})
+			rl.DrawTextEx(g.assets.font, "z", pos, size, 1, {255, 250, 240, alpha})
+			rl.BeginBlendMode(.ADDITIVE)
+		}
 	}
 	if p.flash > 0 {
 		// The dash coming back: a ring of light swells out of her.

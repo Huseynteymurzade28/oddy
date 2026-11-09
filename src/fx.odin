@@ -109,21 +109,22 @@ Popup :: struct {
 	text:   cstring,
 	pos:    rl.Vector2,
 	t:      f32,
+	life:   f32,
 	colour: rl.Color,
 }
 
 POPUP_TIME :: 0.9
 
-spawn_popup :: proc(g: ^Game, pos: rl.Vector2, colour: rl.Color, text: cstring) {
-	append(&g.popups, Popup{text = text, pos = pos, colour = colour})
+spawn_popup :: proc(g: ^Game, pos: rl.Vector2, colour: rl.Color, text: cstring, life: f32 = POPUP_TIME) {
+	append(&g.popups, Popup{text = text, pos = pos, colour = colour, life = life})
 }
 
 popups_update :: proc(g: ^Game, dt: f32) {
 	live := 0
 	for &p in g.popups {
 		p.t += dt
-		p.pos.y -= (28 - p.t * 20) * dt
-		if p.t >= POPUP_TIME {
+		p.pos.y -= max(28 - p.t * 20, 2) * dt * (POPUP_TIME / p.life)
+		if p.t >= p.life {
 			delete(p.text)
 			continue
 		}
@@ -137,7 +138,7 @@ popups_draw :: proc(g: ^Game) {
 	a := &g.assets
 	for p in g.popups {
 		// Pops in a size larger, then settles; fades over the last third.
-		k := clamp(1 - p.t / POPUP_TIME, 0, 1)
+		k := clamp(1 - p.t / p.life, 0, 1)
 		alpha := u8(255 * clamp(k * 3, 0, 1))
 		w := rl.MeasureTextEx(a.font, p.text, 8, 1).x
 		pos := rl.Vector2{math.round(p.pos.x - w / 2), math.round(p.pos.y)}

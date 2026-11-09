@@ -83,6 +83,9 @@ when DEV_SHOTS {
 		g.ui.settings = true
 		frames(g, 5)
 		shot(g, "10_settings")
+		visit(g, 1, 2, 8, 52, "11_x")
+		frames(g, 320)
+		shot(g, "12_sleepy")
 	}
 
 	dev_shots_main :: proc() {

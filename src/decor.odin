@@ -42,6 +42,7 @@ Mote_Kind :: enum u8 {
 	Ember,
 	Butterfly, // drawn from the critters sheet, not as a glowing dot
 	Bubble,
+	Petal, // a petal or a leaf, tumbling down
 }
 
 Mote :: struct {
@@ -213,6 +214,21 @@ motes_update :: proc(g: ^Game, dt: f32) {
 	// What drifts depends on the world.
 	switch zone {
 	case .Mossy:
+		// Petals and the odd leaf coming down on the breeze.
+		if rand.float32() < dt * 1.4 {
+			life := rand.float32_range(6, 10)
+			colours := [4]rl.Color{{255, 190, 210, 255}, {255, 230, 240, 255}, {170, 220, 110, 255}, {255, 214, 140, 255}}
+			spawn_mote(g, {
+				kind = .Petal,
+				pos = {view.x + rand.float32_range(-20, view.width), view.y - 4},
+				vel = {rand.float32_range(4, 14), rand.float32_range(10, 18)},
+				life = life,
+				max_life = life,
+				size = rand.float32_range(1.5, 2.5),
+				tint = colours[rand.int_max(4)],
+				phase = rand.float32_range(0, math.TAU),
+			})
+		}
 		// Pollen on the air, and a few butterflies about.
 		if rand.float32() < dt * 3 {
 			life := rand.float32_range(4, 7)
@@ -361,6 +377,8 @@ motes_update :: proc(g: ^Game, dt: f32) {
 			m.vel.x = clamp(m.vel.x, -20, 20)
 		case .Bubble:
 			m.vel.x = math.sin(m.phase * 4) * 6
+		case .Petal:
+			m.vel.x = 8 + math.sin(m.phase * 1.4) * 14
 		}
 		m.pos += m.vel * dt
 		if m.life <= 0 || !rl.CheckCollisionPointRec(m.pos, {view.x - 40, view.y - 40, view.width + 80, view.height + 80}) {
@@ -385,12 +403,18 @@ motes_draw :: proc(g: ^Game) {
 		case .Bubble:
 			rl.DrawCircleLinesV(m.pos, m.size, {230, 250, 255, u8(200 * fade)})
 			rl.DrawPixelV(m.pos - {m.size * 0.4, m.size * 0.4}, {255, 255, 255, u8(230 * fade)})
+		case .Petal:
+			// A petal turning over as it falls: its width swings.
+			w := m.size * (0.4 + 0.6 * abs(math.sin(m.phase * 2.2)))
+			c := m.tint
+			c.a = u8(f32(c.a) * fade)
+			rl.DrawRectanglePro({m.pos.x, m.pos.y, w * 2, m.size}, {w, m.size / 2}, math.sin(m.phase) * 40, c)
 		case .Firefly, .Dust, .Drip, .Ember:
 		}
 	}
 	rl.BeginBlendMode(.ADDITIVE)
 	for m in g.motes {
-		if m.kind == .Butterfly || m.kind == .Bubble {
+		if m.kind == .Butterfly || m.kind == .Bubble || m.kind == .Petal {
 			continue
 		}
 		fade := clamp(m.life / m.max_life * 3, 0, 1) * clamp(m.life * 2, 0, 1)

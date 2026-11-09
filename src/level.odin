@@ -226,6 +226,7 @@ level_restart :: proc(g: ^Game) {
 	g.fruit_safe = 0
 	g.respawn = g.level.spawn
 	g.deaths = 0
+	g.deaths_here = 0
 	g.level_time = 0
 	g.level_intro = LEVEL_INTRO_TIME
 	clear(&g.sparks)
@@ -399,6 +400,7 @@ level_update :: proc(g: ^Game, dt: f32) {
 		}
 		c.active = true
 		c.lit = true
+		g.deaths_here = 0
 		c.flare = 1
 		g.respawn = c.pos
 		keep_carried_fruit(g)
