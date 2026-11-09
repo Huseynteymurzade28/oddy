@@ -17,7 +17,11 @@ IS_MOBILE :: ODIN_PLATFORM_SUBTARGET == .Android
 // with a `main` would have it run from the loader, before there is a window.
 when !IS_MOBILE {
 	main :: proc() {
-		run()
+		when DEV_SHOTS {
+			dev_shots_main()
+		} else {
+			run()
+		}
 	}
 }
 

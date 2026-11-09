@@ -13,7 +13,7 @@ goes down anyway.
 
 GAME_TITLE :: "LUMI"
 GAME_TITLE_TAIL :: "& THE HOLLOW"
-GAME_TAGLINE :: "ALL THE WAY DOWN THE HOLLOW"
+GAME_TAGLINE :: "A SMALL LIGHT IN A DEEP PLACE"
 
 // Lines are kept under about 44 characters: the virtual screen is 427px wide at
 // 16:9 and the font runs a bit over 8px a character.

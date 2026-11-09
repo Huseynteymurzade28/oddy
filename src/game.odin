@@ -110,7 +110,11 @@ game_update :: proc(g: ^Game, dt: f32) {
 	g.state_time += dt
 	g.fade = max(0, g.fade - dt)
 	music_update(g, dt)
-	g.input = input_poll(g)
+	when DEV_SHOTS {
+		g.input = dev_input
+	} else {
+		g.input = input_poll(g)
+	}
 
 	// F5 reads the levels file again and restarts the level you are on, so
 	// a change saved in LDtk can be played a second later.
@@ -253,5 +257,6 @@ game_draw :: proc(g: ^Game) {
 		k := g.fade / FADE_TIME
 		rl.DrawRectangle(0, 0, rl.GetScreenWidth(), rl.GetScreenHeight(), {14, 10, 22, u8(255 * k * k)})
 	}
+	dev_capture()
 	rl.EndDrawing()
 }

@@ -179,6 +179,10 @@ odin run src -out:lumi -define:TOUCH=true   # the phone's touch layout, with the
 Run it from the repo root (asset paths are relative). `F5` reads the levels
 file again, `F11` toggles fullscreen.
 
+`tools/dev/shots.sh` builds a screenshot mode (`-define:SHOTS=true`, see
+`src/devshots.odin`) that plays a fixed script and saves pictures to
+`build/shots/`; add `-define:TOUCH=true` for the phone's layout.
+
 ## Editing levels
 
 The levels live in one [LDtk](https://ldtk.io) project, `levels/lumi.ldtk`,
