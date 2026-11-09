@@ -51,6 +51,9 @@ Level_Data :: struct {
 	gems:        [dynamic]rl.Vector2,
 	crates:      int, // crate tiles: each one breaks into GEMS_PER_CRATE
 	secret_exit: rl.Vector2, // zero if the level has none
+	has_boss:    bool,
+	boss:        Boss_Kind,
+	boss_pos:    rl.Vector2, // its feet
 	unlocks:     string, // the level that secret exit opens
 	width:       int, // cells
 	height:      int,
@@ -190,6 +193,13 @@ read_level :: proc(lv: json.Value) -> (d: Level_Data, ok: bool) {
 				ident := str(get(e, "__identifier"))
 				if kind, is_thing := thing_kind_from_name(ident); is_thing {
 					append(&d.things, read_thing(e, kind, pos))
+					continue
+				}
+				if kind, is_boss := boss_kind_from_name(ident); is_boss {
+					t := read_thing(e, .Saw, pos) // only for its rectangle
+					d.has_boss = true
+					d.boss = kind
+					d.boss_pos = {t.rect.x + t.rect.width / 2, t.rect.y + t.rect.height}
 					continue
 				}
 				switch ident {

@@ -41,6 +41,9 @@ Game :: struct {
 	things:       [dynamic]Thing, // traps and moving pieces
 	enemies:      [dynamic]Enemy,
 	arrows:       [dynamic]Arrow,
+	boss:         Boss,
+	waves:        [dynamic]Wave,
+	boss_intro:   f32, // the boss's name, fading out
 	decor:        [dynamic]Decor, // torches, roots, crystals: drawn in code, mostly lit
 	motes:        [dynamic]Mote, // what drifts through the air
 	liquid_glows: [dynamic]rl.Vector2, // points along lava that light the level
@@ -90,6 +93,7 @@ game_destroy :: proc(g: ^Game) {
 	delete(g.things)
 	delete(g.enemies)
 	delete(g.arrows)
+	delete(g.waves)
 	delete(g.decor)
 	delete(g.motes)
 	delete(g.liquid_glows)
@@ -156,6 +160,9 @@ game_update_play :: proc(g: ^Game, dt: f32) {
 	things_update(g, dt)
 	player_update(g, dt)
 	enemies_update(g, dt)
+	boss_update(g, dt)
+	waves_update(g, dt)
+	g.boss_intro = max(0, g.boss_intro - dt)
 	level_update(g, dt)
 	sparks_update(g, dt)
 	poofs_update(g, dt)
@@ -203,9 +210,11 @@ game_draw :: proc(g: ^Game) {
 	level_draw_flags(g)
 	things_draw(g)
 	enemies_draw(g)
+	boss_draw(g)
 	level_draw_fruit(g)
 	level_draw_gems(g)
 	player_draw(g.player, &g.assets)
+	tilemap_draw_water_front(g, view)
 	poofs_draw(g)
 	rl.EndMode2D()
 

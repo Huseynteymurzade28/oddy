@@ -387,7 +387,7 @@ world_map_draw :: proc(g: ^Game) {
 
 	list := page_levels(g)
 	if !world_open(g, m.world) || len(list) == 0 {
-		msg: cstring = len(list) == 0 ? "COMING SOON" : "CLEAR THE WORLD BEFORE TO OPEN THIS ONE"
+		msg: cstring = len(list) == 0 ? "COMING SOON" : fmt.ctprintf("BEAT WORLD %v TO OPEN THIS ONE", m.world - 1)
 		draw_text_outlined_centered(a, msg, 108, 8, {210, 210, 230, 255})
 		draw_totals(g)
 		return

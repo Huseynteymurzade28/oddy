@@ -175,6 +175,14 @@ level_reset_things :: proc(g: ^Game) {
 	clear(&g.things)
 	clear(&g.enemies)
 	clear(&g.arrows)
+	clear(&g.waves)
+	// The boss comes back at full strength, unless it is already beaten.
+	d := &g.levels[g.level.index]
+	if d.has_boss && !g.boss.beaten {
+		g.boss = boss_make(d.boss, d.boss_pos)
+	} else if !d.has_boss {
+		g.boss = {}
+	}
 	for d in g.levels[g.level.index].things {
 		if d.kind >= FIRST_CREATURE {
 			append(&g.enemies, enemy_make(d))
@@ -195,6 +203,7 @@ level_restart :: proc(g: ^Game) {
 		f.pos = f.home
 	}
 	g.level.kept = 0
+	g.boss = {} // a restart brings a beaten boss back too
 	// A restart puts the crates and gems back; a death does not.
 	d := &g.levels[g.level.index]
 	copy(g.map_tiles.tiles, d.tiles)
@@ -389,7 +398,8 @@ level_update :: proc(g: ^Game, dt: f32) {
 		play(&g.assets, .Checkpoint)
 		haptic(.Checkpoint)
 	}
-	if rl.CheckCollisionRecs(pr, flag_rect(g.level.exit, EXIT_REACH)) {
+	exit_open := !g.boss.present || g.boss.beaten
+	if exit_open && rl.CheckCollisionRecs(pr, flag_rect(g.level.exit, EXIT_REACH)) {
 		level_clear(g, false)
 	} else if g.level.secret_exit != {} && rl.CheckCollisionRecs(pr, flag_rect(g.level.secret_exit, EXIT_REACH)) {
 		level_clear(g, true)
@@ -465,6 +475,9 @@ level_draw_flags :: proc(g: ^Game) {
 	if g.exit_anim.anim != nil {
 		animator_update(&g.exit_anim, rl.GetFrameTime())
 		animator_draw(g.exit_anim, g.level.exit, false)
+	} else if g.boss.present && !g.boss.beaten {
+		// Shut until the boss is down: a grey, sleeping trophy.
+		anim_draw_frame(&m.end, 0, g.level.exit, false, {110, 104, 130, 160})
 	} else {
 		anim_draw_frame(&m.end, 0, g.level.exit, false)
 	}

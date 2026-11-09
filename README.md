@@ -39,6 +39,27 @@ On the world map, tap a level to pick it and tap it again (or PLAY) to go;
 the arrows by the title turn to the next world, HERO picks who you play as.
 On a keyboard: left and right, `Q` `E` for worlds, `Enter`, `H`, `Esc`.
 
+## The worlds
+
+- **The Moss** (1-1 to 1-5): the basics, trampolines, fans, creatures, and at
+  the end the Ooze King.
+- **The Drowned Halls** (2-1 on): water you can swim in. You sink slowly,
+  jump strokes you upward, a stroke at the surface throws you out, and the
+  water gives your dash back. Underwater tunnels, walls to dive under,
+  spiked heads in the halls.
+- **The Ember Deep**: still to come. Here the liquid is lava, and kills.
+
+## Bosses
+
+The last level of each world. No gun: every boss is beaten by landing on it
+at the right moment, and every move it makes is telegraphed. The exit stays
+shut until it is down; dying puts it back at full strength.
+
+- **The Ooze King** (1-5). It squats, then hops at you, and every landing
+  sends a ripple along the floor to jump. Just after it lands it sags, open:
+  land on it. Three hits; each makes it smaller and quicker, and from the
+  second on it sheds little slimes. A hit throws you clear.
+
 ## Things to find and break
 
 - **Gems.** Strung along good paths and spilling out of crates. Pick a run of
@@ -103,7 +124,10 @@ boss you beat without a gun.
    crates, combos, confetti, butterflies and birds, flowers in the breeze.
 5. **The map** — done: the world map, saving, fruit, medals, secret exits
    (1-1 hides one, into the secret level 1-S), four heroes.
-6. The fifteen levels and the three bosses.
+6. **Levels and bosses** — under way: world 1 complete (1-1 to 1-4, the
+   secret 1-S, the Ooze King in 1-5), world 2 begun (2-1, 2-2) with
+   swimming. Still to come: 2-3 to 2-5 and the Broodmother, world 3 and the
+   Warden.
 7. Music per world, more art, the name.
 
 ## Building
@@ -170,6 +194,7 @@ level you are on.
   | `Rino` | charges when you are level with it, dazed when it hits a wall |
   | `Bat` | swings three tiles either side of where it is placed |
   | `Bee` | bobs up and down |
+  | `Ooze_King` | world 1's boss; the level's exit opens when it is beaten |
 
   Land on a creature to kill it: you bounce and get the dash back. Touching
   one any other way, or any trap, is a death. Everything is put back as it
@@ -211,6 +236,7 @@ nothing but import cycles, so files are grouped by prefix instead.
 | `save.odin` | the save file |
 | `things.odin` | traps and moving pieces |
 | `enemy.odin` | the creatures, and landing on them |
+| `boss.odin` | the bosses, their floor ripples, the boss bar |
 | `tilemap.odin` | tile grid, spikes, autotiling, grass and flowers, drawing |
 | `camera.odin` | virtual resolution, the following camera, the parallax backdrops |
 | `lighting.odin` | the light map and every light in it |

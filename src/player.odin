@@ -55,6 +55,14 @@ SUPER_X :: 260.0
 HYPER_X :: 320.0
 HYPER_Y_SCALE :: 0.55
 
+// Swimming, in any world but the one where the liquid is lava.
+SWIM_SINK :: 280.0 // gravity in water
+SWIM_MAX_SINK :: 70.0
+SWIM_SPEED :: 100.0
+SWIM_ACCEL :: 700.0
+SWIM_STROKE :: 175.0 // a press of jump: a stroke upward
+SWIM_LEAP :: 340.0 // a stroke at the surface throws you out
+
 DEATH_TIME :: 0.5 // from the hit to being back at the checkpoint
 RESPAWN_TIME :: 0.32 // the puff you arrive in; the body shows once it clears
 FALL_DEATH_MARGIN :: 32.0 // how far under the level counts as fallen out of it
@@ -102,6 +110,7 @@ Player :: struct {
 
 	riding:       int, // the platform in `g.things` stood on, or -1
 	combo:        int, // bounces off creatures and trampolines since last on the ground
+	in_water:     bool,
 
 	dead:         bool,
 	death_timer:  f32,
@@ -279,8 +288,40 @@ player_update :: proc(g: ^Game, dt: f32) {
 	sliding := !dashing && !p.grounded && p.vel.y > 0 && touching != 0 && move == touching
 	p.wall_dir = sliding ? touching : 0
 
+	// --- swimming ------------------------------------------------------------
+	centre := player_centre(p^)
+	water_here := tile_at(m, int(math.floor(centre.x / TILE)), int(math.floor(centre.y / TILE))) == .Water
+	swimming := water_here && g.level.zone != .Ember
+	if swimming && !p.in_water {
+		// Splash in.
+		spawn_burst(g, centre, {220, 245, 255, 255}, 10, 90, 1.1)
+		p.vel.y *= 0.35
+	}
+	p.in_water = swimming
+	if swimming {
+		player_refill_dash(p)
+		p.coyote = 0
+		if p.jump_buffer > 0 && !dashing {
+			p.jump_buffer = 0
+			// At the surface a stroke throws you clear of the water.
+			head := tile_at(m, int(math.floor(centre.x / TILE)), int(math.floor((centre.y - 10) / TILE)))
+			if head != .Water {
+				p.vel.y = -SWIM_LEAP
+				p.stretch = STRETCH_JUMP
+				spawn_burst(g, {centre.x, centre.y - 8}, {220, 245, 255, 255}, 12, 110, 1.2)
+				play(a, .Jump)
+			} else {
+				p.vel.y = -SWIM_STROKE
+				p.stretch = {1.2, 0.85}
+				spawn_burst(g, centre + {0, 6}, {220, 245, 255, 200}, 4, 40, 0.8)
+				play_pitched(a, .Jump, 0.7)
+			}
+			p.holding_jump = false
+		}
+	}
+
 	// --- jumping -------------------------------------------------------------
-	if p.jump_buffer > 0 {
+	if p.jump_buffer > 0 && !swimming {
 		near_wall := wall_side(m, grow_x(r, WALL_JUMP_REACH))
 		switch {
 		case dashing && (p.grounded || p.coyote > 0) && p.dash_dir.y >= 0 && p.dash_dir.x != 0:
@@ -330,7 +371,14 @@ player_update :: proc(g: ^Game, dt: f32) {
 		p.holding_jump = false
 	}
 
-	if !dashing {
+	if swimming && !dashing {
+		// Water: you sink slowly, steer gently, and drift to a stop.
+		p.vel.y = min(p.vel.y + SWIM_SINK * dt, SWIM_MAX_SINK)
+		if p.vel.y < -SWIM_LEAP {
+			p.vel.y = -SWIM_LEAP
+		}
+		p.vel.x = approach(p.vel.x, move * SWIM_SPEED, SWIM_ACCEL * dt)
+	} else if !dashing {
 		gravity: f32 = GRAVITY
 		switch {
 		case abs(p.vel.y) < APEX_WINDOW && in_.jump_held:
@@ -446,15 +494,20 @@ player_update :: proc(g: ^Game, dt: f32) {
 	}
 	p.pos = {r.x + PLAYER_W / 2, r.y + PLAYER_H}
 
-	if tilemap_touches_hazard(m, player_rect(p^)) || p.pos.y > tilemap_bounds(m).y + FALL_DEATH_MARGIN {
+	if tilemap_touches_hazard(m, player_rect(p^), g.level.zone == .Ember) || p.pos.y > tilemap_bounds(m).y + FALL_DEATH_MARGIN {
 		player_kill(g)
 		return
 	}
 
-	// Little puffs behind the heels while running, and down a wall you slide.
+	// Little puffs behind the heels while running, and down a wall you slide;
+	// bubbles while you swim.
 	p.dust_timer -= dt
 	if p.dust_timer <= 0 {
 		switch {
+		case p.in_water:
+			p.dust_timer = 0.35
+			spawn_spark(g, player_centre(p^) + {p.flip ? -3 : 3, -6}, {0, -1}, {220, 245, 255, 220}, 40, 0.9)
+			g.sparks[len(g.sparks) - 1].gravity = -90 // bubbles rise
 		case p.grounded && abs(p.vel.x) > 90:
 			p.dust_timer = RUN_DUST_GAP
 			spawn_spark(g, p.pos - {math.sign(p.vel.x) * 3, 1}, {-math.sign(p.vel.x), -0.6}, {210, 220, 200, 200}, 30, 0.8)

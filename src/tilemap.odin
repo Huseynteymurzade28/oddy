@@ -121,14 +121,17 @@ spike_hitbox :: proc(m: ^Tilemap, x, y: int) -> rl.Rectangle {
 }
 
 // Hazards do not block movement, they just kill, so they are queried separately.
-// Water kills anywhere in its tile, spikes only in their hitbox.
-tilemap_touches_hazard :: proc(m: ^Tilemap, r: rl.Rectangle) -> bool {
+// Spikes kill in their hitbox; liquid only when it is lava (`liquid_kills`),
+// otherwise you swim in it.
+tilemap_touches_hazard :: proc(m: ^Tilemap, r: rl.Rectangle, liquid_kills: bool) -> bool {
 	x0, y0, x1, y1 := tile_range(r)
 	for ty in y0 ..= y1 {
 		for tx in x0 ..= x1 {
 			switch tile_at(m, tx, ty) {
 			case .Water:
-				return true
+				if liquid_kills {
+					return true
+				}
 			case .Spike:
 				if rl.CheckCollisionRecs(r, spike_hitbox(m, tx, ty)) {
 					return true
@@ -228,7 +231,8 @@ tilemap_draw :: proc(g: ^Game, view: rl.Rectangle) {
 				}
 				draw(tex, col, ROW_PLATFORM, x, y)
 			case .Water:
-				surface := tile_at(m, x, y - 1) != .Water
+				// Foam only where the water meets open air, not under a roof.
+				surface := tile_at(m, x, y - 1) == .Empty
 				col := (frame + x) % 4 + (surface ? 0 : 4)
 				draw(tex, col, ROW_LIQUID, x, y, {255, 255, 255, 235})
 			case .Spike:
@@ -276,4 +280,29 @@ draw_spike :: proc(g: ^Game, x, y: int) {
 	src := rl.Rectangle{0, 0, f32(tex.width), f32(tex.height)}
 	dest := rl.Rectangle{f32(x) * TILE + TILE / 2, f32(y) * TILE + TILE / 2, TILE, TILE}
 	rl.DrawTexturePro(tex, src, dest, {TILE / 2, TILE / 2}, angle, rl.WHITE)
+}
+
+// The water again, see-through, over whatever is in it: the player and the
+// creatures look like they are in it rather than in front of it.
+tilemap_draw_water_front :: proc(g: ^Game, view: rl.Rectangle) {
+	if g.level.zone == .Ember {
+		return // nothing swims in lava
+	}
+	m := &g.map_tiles
+	tex := g.assets.terrain[g.level.zone]
+	x0 := max(0, int(math.floor(view.x / TILE)) - 1)
+	y0 := max(0, int(math.floor(view.y / TILE)) - 1)
+	x1 := min(m.width - 1, int((view.x + view.width) / TILE) + 1)
+	y1 := min(m.height - 1, int((view.y + view.height) / TILE) + 1)
+	frame := int(g.time / LIQUID_FRAME_TIME) % 4
+	for y in y0 ..= y1 {
+		for x in x0 ..= x1 {
+			if tile_at(m, x, y) != .Water {
+				continue
+			}
+			surface := tile_at(m, x, y - 1) == .Empty
+			col := (frame + x) % 4 + (surface ? 0 : 4)
+			rl.DrawTexturePro(tex, terrain_source(col, ROW_LIQUID), {f32(x) * TILE, f32(y) * TILE, TILE, TILE}, {}, 0, {255, 255, 255, 110})
+		}
+	}
 }

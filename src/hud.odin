@@ -84,6 +84,15 @@ format_time :: proc(seconds: f32) -> string {
 	return fmt.tprintf("%d:%02d.%02d", total / 6000, (total / 100) % 60, total % 100)
 }
 
+// A 7px heart, drawn rather than loaded: a boss's hits left.
+draw_heart :: proc(x, y: f32, color: rl.Color) {
+	s := hud_scale()
+	p :: proc(x, y, s: f32) -> rl.Vector2 {return {x * s, y * s}}
+	rl.DrawCircleV(p(x + 2, y + 2.2, s), 2.3 * s, color)
+	rl.DrawCircleV(p(x + 5, y + 2.2, s), 2.3 * s, color)
+	rl.DrawTriangle(p(x - 0.3, y + 2.6, s), p(x + 3.5, y + 7.6, s), p(x + 7.3, y + 2.6, s), color)
+}
+
 // A small skull, drawn rather than loaded, beside the death count.
 draw_skull :: proc(x, y: f32, color: rl.Color) {
 	s := hud_scale()
@@ -107,6 +116,7 @@ hud_draw :: proc(g: ^Game) {
 		draw_iris(g)
 		draw_stats(g)
 		draw_level_name(g)
+		boss_hud_draw(g)
 		when TOUCH_CONTROLS {
 			draw_touch_controls(g)
 			draw_pause_button(g)
