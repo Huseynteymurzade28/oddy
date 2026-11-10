@@ -18,7 +18,8 @@ and its air all go into one off-screen picture the size of the window; then:
 Picking out the highlights is the one shader in the game. If it does not
 compile on some phone, the bloom is simply left out.
 
-The menus and the HUD are drawn afterwards, straight to the window.
+The title's meadow and the world map's land go through it too; buttons,
+cards and the HUD are drawn afterwards, straight to the window.
 */
 
 BLOOM_STEPS :: 5
@@ -170,7 +171,14 @@ post_end :: proc(g: ^Game) {
 
 	// The highlights, at one texel per virtual pixel.
 	first := p.bloom[0]
-	threshold := BLOOM_THRESHOLD[g.level.zone]
+	zone := g.level.zone
+	#partial switch g.state {
+	case .Title:
+		zone = .Mossy
+	case .Map:
+		zone = world_map_zone(g)
+	}
+	threshold := BLOOM_THRESHOLD[zone]
 	rl.BeginTextureMode(first)
 	rl.ClearBackground(rl.BLACK)
 	rl.BeginShaderMode(p.highlights)

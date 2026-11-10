@@ -29,6 +29,8 @@ when DEV_SHOTS {
 		for i in 0 ..< n {
 			dev_input = in_
 			if i > 0 {
+				dev_input.nav_x = 0
+				dev_input.page = 0
 				dev_input.jump = false
 				dev_input.dash = false
 			}
@@ -70,6 +72,21 @@ when DEV_SHOTS {
 		world_map_open(g, 0)
 		frames(g, 40)
 		shot(g, "02_map")
+		// The same map with some progress, mid-reveal, and the other worlds.
+		for id in ([?]string{"W1_1", "W1_2", "W1_3"}) {
+			g.save.levels[strings.clone(id)] = {cleared = true, best_time = 31.2, fruit = 3, best_gems = 20}
+		}
+		world_map_init(g)
+		g.world_map.known[3] = false
+		world_map_open(g, 2)
+		frames(g, 62)
+		shot(g, "02b_map_reveal")
+		frames(g, 60, {nav_x = 1})
+		shot(g, "02c_map_progress")
+		frames(g, 12, {page = 1})
+		shot(g, "02d_map_slide")
+		frames(g, 60)
+		shot(g, "02e_map_locked")
 		visit(g, 1, 1, 8, 17, "03_w1")
 		visit(g, 1, 3, 62, 17, "04_w1_traps")
 		visit(g, 2, 1, 20, 20, "05_w2_swim")

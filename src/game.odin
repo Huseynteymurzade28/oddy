@@ -211,24 +211,8 @@ game_set_state :: proc(g: ^Game, state: Game_State) {
 	}
 }
 
-game_draw :: proc(g: ^Game) {
-	view := camera_view(g)
-
-	shake: rl.Vector2
-	if g.shake > 0 {
-		shake = {rand.float32_range(-g.shake, g.shake), rand.float32_range(-g.shake, g.shake)}
-	}
-	cam := g.camera
-	cam.offset += shake
-	// On whole screen pixels, or the seams between tiles show as the camera
-	// drifts.
-	cam.target.x = math.round(cam.target.x * cam.zoom) / cam.zoom
-	cam.target.y = math.round(cam.target.y * cam.zoom) / cam.zoom
-
-	// The light map is its own render pass, so it goes first.
-	lighting_render(g, shake)
-
-	post_begin(g)
+@(private = "file")
+draw_world :: proc(g: ^Game, cam: rl.Camera2D, view: rl.Rectangle) {
 	rl.ClearBackground({40, 52, 62, 255})
 	draw_background(g)
 
@@ -264,6 +248,36 @@ game_draw :: proc(g: ^Game) {
 	popups_draw(g)
 	rl.EndMode2D()
 	foreground_draw(g)
+}
+
+game_draw :: proc(g: ^Game) {
+	view := camera_view(g)
+
+	shake: rl.Vector2
+	if g.shake > 0 {
+		shake = {rand.float32_range(-g.shake, g.shake), rand.float32_range(-g.shake, g.shake)}
+	}
+	cam := g.camera
+	cam.offset += shake
+	// On whole screen pixels, or the seams between tiles show as the camera
+	// drifts.
+	cam.target.x = math.round(cam.target.x * cam.zoom) / cam.zoom
+	cam.target.y = math.round(cam.target.y * cam.zoom) / cam.zoom
+
+	// The light map is its own render pass, so it goes first.
+	lighting_render(g, shake)
+
+	// The level, or the scene behind a menu, into the picture the glow is
+	// made from.
+	post_begin(g)
+	switch g.state {
+	case .Title:
+		draw_title_scene(g)
+	case .Map:
+		world_map_draw_scene(g)
+	case .Playing, .Paused, .Cleared:
+		draw_world(g, cam, view)
+	}
 	post_end(g)
 
 	rl.BeginDrawing()

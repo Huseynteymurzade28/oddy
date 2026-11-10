@@ -43,7 +43,6 @@ centred_in :: proc(a: ^Assets, r: rl.Rectangle, text: cstring, y, size: f32, col
 
 // The title stands in the meadow: the sky and hills behind, a strip of
 // grassy ground along the bottom, and your hero trotting on the spot.
-@(private = "file")
 draw_title_scene :: proc(g: ^Game) {
 	a := &g.assets
 	view := view_size()
@@ -74,6 +73,9 @@ draw_title_scene :: proc(g: ^Game) {
 	anim := &a.player.run
 	frame := int(g.time / anim.frame_time) % anim.count
 	bob := math.abs(math.sin(g.time * 9)) * 1.2
+	rl.BeginBlendMode(.ADDITIVE)
+	rl.DrawCircleGradient({view.x * 0.18 * s, (ground_y - 12) * s}, 34 * s, {110, 96, 64, 255}, {0, 0, 0, 255})
+	rl.EndBlendMode()
 	anim_draw_frame(anim, frame, {view.x * 0.18 * s, (ground_y - bob) * s}, false, rl.WHITE, s)
 	rl.DrawRectangleGradientV(0, 0, rl.GetScreenWidth(), i32(110 * s), {20, 14, 40, 90}, {20, 14, 40, 0})
 }
@@ -81,7 +83,6 @@ draw_title_scene :: proc(g: ^Game) {
 draw_title_screen :: proc(g: ^Game) {
 	a := &g.assets
 	view := view_size()
-	draw_title_scene(g)
 
 	if g.ui.how_to {
 		draw_how_to(g)
@@ -101,10 +102,19 @@ draw_title_screen :: proc(g: ^Game) {
 	draw_text_outlined_centered(a, GAME_TITLE_TAIL, 62 + drop * 0.5, 16, {255, 236, 200, 255}, {255, 250, 230, 255})
 	draw_text_outlined_centered(a, GAME_TAGLINE, 82, 8, {240, 226, 255, 255})
 
-	draw_panel(g, menu_panel(g))
+	// The buttons stand on the scene itself, each with a shadow under it.
+	for item in menu_items(g) {
+		r := item.rect
+		fill_rect(r.x + 2, r.y + 4, r.width, r.height, {14, 10, 30, 80})
+	}
 	draw_menu(g)
 
-	_ = view
+	// How far you have got, in a line along the bottom.
+	got := progress_totals(g)
+	if got.gems > 0 || got.medals > 0 {
+		line := fmt.ctprintf("%v GEMS   %v FRUIT   %v MEDALS", got.gems, got.fruit, got.medals)
+		draw_text_outlined(a, line, {(view.x - text_width(a, line, 8)) / 2, 182}, 8, {255, 244, 222, 255})
+	}
 }
 
 @(private = "file")

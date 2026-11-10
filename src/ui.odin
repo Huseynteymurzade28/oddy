@@ -126,16 +126,19 @@ menu_items :: proc(g: ^Game) -> []Menu_Item {
 		if g.ui.how_to {
 			column(&items, panel, panel.y + panel.height - BUTTON_H - 10, {{label = "BACK", colour = .Yellow, action = .Back}})
 		} else {
-			column(
-				&items,
-				panel,
-				panel.y + 11,
-				{
-					{label = "PLAY", colour = .Green, action = .Play},
-					{label = "SETTINGS", colour = .Blue, action = .Settings},
-					{label = "QUIT", colour = .Red, action = .Quit},
-				},
-			)
+			// No board here: one big button to go and play, and two small
+			// ones under it, standing in the meadow itself.
+			view := view_size()
+			w: f32 = 168
+			x := (view.x - w) / 2
+			half := (w - 6) / 2
+			started := false
+			for d in g.levels {
+				started ||= save_level(&g.save, d.ident).cleared
+			}
+			append(&items, Menu_Item{label = started ? "CONTINUE" : "PLAY", colour = .Green, action = .Play, rect = {x, 106, w, 36}})
+			append(&items, Menu_Item{label = "SETTINGS", colour = .Blue, action = .Settings, rect = {x, 148, half, 24}})
+			append(&items, Menu_Item{label = "QUIT", colour = .Red, action = .Quit, rect = {x + half + 6, 148, half, 24}})
 		}
 	case .Paused:
 		column(
@@ -344,18 +347,25 @@ draw_menu :: proc(g: ^Game) {
 			r.height -= 2
 		}
 		tint := ready ? rl.WHITE : rl.Color{255, 255, 255, 140}
+		// The way into the game breathes a little, so the eye finds it.
+		if item.action == .Play && !pressed && ready {
+			swell := math.sin(g.time * 3.2) * 0.9
+			r = {r.x - swell, r.y - swell, r.width + swell * 2, r.height + swell * 2}
+		}
 		draw_nine(tex, r, tint)
 
 		// Big letters on full-size buttons that have room for them; the
 		// shorter rows of the settings card always use the small size, so
 		// the card reads as one list.
 		size: f32 = 16
-		if r.height < BUTTON_H || text_width(a, item.label, size) > r.width - 12 {
+		if r.height >= 34 && text_width(a, item.label, 24) <= r.width - 16 {
+			size = 24 // the one big button on the title
+		} else if r.height < BUTTON_H || text_width(a, item.label, size) > r.width - 12 {
 			size = 8
 		}
 		tw := text_width(a, item.label, size)
 		ty := r.y + (r.height - 2 - size) / 2
-		draw_text(a, item.label, {r.x + (r.width - tw) / 2, ty + 1}, size, {20, 16, 30, 110})
+		draw_text(a, item.label, {r.x + (r.width - tw) / 2, ty + (size >= 24 ? 2 : 1)}, size, {20, 16, 30, 110})
 		draw_text(a, item.label, {r.x + (r.width - tw) / 2, ty}, size, rl.WHITE)
 
 		// The keyboard's marker: a pair of arrows either side, bobbing.
