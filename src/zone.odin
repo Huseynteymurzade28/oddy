@@ -28,6 +28,8 @@ Zone_Look :: struct {
 	liquid:     rl.Color, // tint over the water tiles
 	mote:       rl.Color, // the drifting particles
 	accent:     rl.Color, // torches, crystals: the colour of local light
+	shade:      rl.Color, // what the sky does not reach is multiplied by this
+	haze:       rl.Color, // the air between the far hills, and what distance fades to
 }
 
 ZONE_LOOKS := [Zone]Zone_Look {
@@ -38,6 +40,8 @@ ZONE_LOOKS := [Zone]Zone_Look {
 		liquid     = {220, 250, 255, 210},
 		mote       = {236, 255, 140, 255},
 		accent     = {255, 206, 120, 255},
+		shade      = {138, 150, 198, 255}, // warm sun, cool shadow
+		haze       = {214, 240, 252, 255},
 	},
 	.Drowned = {
 		ambient    = {232, 244, 255, 255},
@@ -46,6 +50,8 @@ ZONE_LOOKS := [Zone]Zone_Look {
 		liquid     = {170, 220, 255, 220},
 		mote       = {150, 210, 255, 255},
 		accent     = {120, 220, 255, 255},
+		shade      = {112, 136, 190, 255},
+		haze       = {196, 232, 250, 255},
 	},
 	.Ember = {
 		ambient    = {255, 236, 226, 255},
@@ -54,6 +60,8 @@ ZONE_LOOKS := [Zone]Zone_Look {
 		liquid     = {255, 120, 50, 245}, // lava
 		mote       = {255, 150, 70, 255},
 		accent     = {255, 120, 70, 255},
+		shade      = {160, 108, 128, 255},
+		haze       = {255, 196, 150, 255},
 	},
 }
 

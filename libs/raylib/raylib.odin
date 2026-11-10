@@ -939,6 +939,10 @@ foreign lib {
 	//------------------------------------------------------------------------------------
 	// It's lonely here...
 
+	// From rlgl, which has no bindings of its own here: the id a shader gets
+	// when its own code fails to compile.
+	rlGetShaderIdDefault :: proc() -> c.uint ---
+
 	//------------------------------------------------------------------------------------
 	// Window and Graphics Device Functions (Module: core)
 	//------------------------------------------------------------------------------------

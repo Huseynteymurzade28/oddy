@@ -1,5 +1,6 @@
 package game
 
+import "core:math"
 import "core:math/rand"
 import rl "../libs/raylib"
 
@@ -49,6 +50,7 @@ Game :: struct {
 	motes:        [dynamic]Mote, // what drifts through the air
 	liquid_glows: [dynamic]rl.Vector2, // points along lava that light the level
 	lighting:     Lighting,
+	post:         Post,
 	music:        Music_Player,
 	state:        Game_State,
 	time:         f32, // wall clock, keeps running on menus
@@ -105,6 +107,7 @@ game_destroy :: proc(g: ^Game) {
 	delete(g.motes)
 	delete(g.liquid_glows)
 	lighting_destroy(&g.lighting)
+	post_destroy(&g.post)
 }
 
 game_update :: proc(g: ^Game, dt: f32) {
@@ -217,16 +220,21 @@ game_draw :: proc(g: ^Game) {
 	}
 	cam := g.camera
 	cam.offset += shake
+	// On whole screen pixels, or the seams between tiles show as the camera
+	// drifts.
+	cam.target.x = math.round(cam.target.x * cam.zoom) / cam.zoom
+	cam.target.y = math.round(cam.target.y * cam.zoom) / cam.zoom
 
 	// The light map is its own render pass, so it goes first.
 	lighting_render(g, shake)
 
-	rl.BeginDrawing()
+	post_begin(g)
 	rl.ClearBackground({40, 52, 62, 255})
 	draw_background(g)
 
 	rl.BeginMode2D(cam)
 	tilemap_draw(g, view)
+	shadows_draw(g)
 	decor_draw(g)
 	level_draw_flags(g)
 	things_draw(g)
@@ -254,9 +262,13 @@ game_draw :: proc(g: ^Game) {
 	}
 	level_draw_hints(g)
 	popups_draw(g)
-	draw_vignette(g, view)
 	rl.EndMode2D()
+	foreground_draw(g)
+	post_end(g)
 
+	rl.BeginDrawing()
+	rl.ClearBackground(rl.BLACK)
+	post_present(g)
 	hud_draw(g)
 	if g.fade > 0 {
 		k := g.fade / FADE_TIME

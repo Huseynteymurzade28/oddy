@@ -166,6 +166,7 @@ level_enter :: proc(g: ^Game, wanted: int) {
 	}
 	g.exit_anim = {}
 	decor_scatter(g)
+	lighting_bake(g)
 	level_restart(g)
 }
 

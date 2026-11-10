@@ -82,23 +82,6 @@ camera_update :: proc(g: ^Game, dt: f32) {
 	camera_clamp(g)
 }
 
-// A faint darkening at the top and bottom edges, to hold the eye in the
-// middle of the screen.
-draw_vignette :: proc(g: ^Game, view: rl.Rectangle) {
-	edge := rl.Color{10, 8, 16, 22}
-	clear := rl.Color{10, 8, 16, 0}
-	band := view.height * 0.16
-	rl.DrawRectangleGradientV(i32(view.x), i32(view.y), i32(view.width), i32(band), edge, clear)
-	rl.DrawRectangleGradientV(
-		i32(view.x),
-		i32(view.y + view.height - band),
-		i32(view.width),
-		i32(band),
-		clear,
-		edge,
-	)
-}
-
 // Each world's own five layers (see tools/art/backgrounds.py): the sky, the
 // clouds, the far horizon, the hills and the nearest silhouettes, each moving
 // a little more with the camera than the one behind it. Drawn in screen space
@@ -109,6 +92,7 @@ BG_H :: 270.0
 
 draw_background :: proc(g: ^Game) {
 	draw_backdrop(g, g.level.zone, g.camera.target, tilemap_bounds(&g.map_tiles).y)
+	midground_draw(g, g.level.zone, g.camera.target)
 }
 
 // Also used by the world map, with a slowly panning point of view.
@@ -138,6 +122,7 @@ draw_backdrop :: proc(g: ^Game, zone: Zone, look: rl.Vector2, level_h: f32) {
 		if i == 1 && zone == .Mossy {
 			draw_birds(g, view, s)
 		}
+		haze_draw(zone, i)
 	}
 }
 

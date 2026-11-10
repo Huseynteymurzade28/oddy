@@ -49,8 +49,11 @@ draw_title_scene :: proc(g: ^Game) {
 	view := view_size()
 	s := hud_scale()
 	draw_backdrop(g, .Mossy, {g.time * 14, 120}, 240)
+	midground_draw(g, .Mossy, {g.time * 30, 120})
 	tex := a.terrain[.Mossy]
-	ground_y: f32 = view.y - 26
+	// On a whole screen pixel, or the tiles' neighbours in the sheet bleed
+	// in along their edges.
+	ground_y: f32 = math.round((view.y - 26) * s) / s
 	scroll := math.mod(g.time * 30, TILE)
 	for i in -1 ..< int(view.x / TILE) + 2 {
 		x := f32(i) * TILE - scroll

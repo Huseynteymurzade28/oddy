@@ -156,8 +156,9 @@ Each world's terrain sheet (drawn by tools/art/terrain.py) is 16 tiles wide:
   row 7     one-way platform: left end, two middles, right end, a lone one.
   row 8     liquid: the surface in four frames (0-3), the body (4-7).
 
-The ground darkens a step with each tile further from the open air above it,
-which gives the earth depth without a second set of tiles.
+The ground darkens the further it is from the open sky, which gives the earth
+depth without a second set of tiles: that is the light map's doing, see
+`lighting_bake`.
 */
 
 terrain_source :: proc(col, row: int) -> rl.Rectangle {
@@ -206,13 +207,7 @@ tilemap_draw :: proc(g: ^Game, view: rl.Rectangle) {
 				down := solid_at(m, x, y + 1)
 				left := solid_at(m, x - 1, y)
 				mask := int(up) | int(right) << 1 | int(down) << 2 | int(left) << 3
-				// How deep under the surface: a step darker per tile.
-				depth := 0
-				for depth < 4 && solid_at(m, x, y - depth - 1) && y - depth - 1 >= 0 {
-					depth += 1
-				}
-				k := u8(255 - depth * 14)
-				draw(tex, mask, cell_hash(x, y, 1) % GROUND_VARIANTS, x, y, {k, k, k, 255})
+				draw(tex, mask, cell_hash(x, y, 1) % GROUND_VARIANTS, x, y)
 				if up && left && !solid_at(m, x - 1, y - 1) {draw(tex, 0, ROW_EXTRAS, x, y)}
 				if up && right && !solid_at(m, x + 1, y - 1) {draw(tex, 1, ROW_EXTRAS, x, y)}
 				if down && left && !solid_at(m, x - 1, y + 1) {draw(tex, 2, ROW_EXTRAS, x, y)}
@@ -283,26 +278,92 @@ draw_spike :: proc(g: ^Game, x, y: int) {
 }
 
 // The water again, see-through, over whatever is in it: the player and the
-// creatures look like they are in it rather than in front of it.
+// creatures look like they are in it rather than in front of it. Then its
+// depth: the liquid darkens the further down it goes, and daylight slants
+// in through the surface.
 tilemap_draw_water_front :: proc(g: ^Game, view: rl.Rectangle) {
-	if g.level.zone == .Ember {
-		return // nothing swims in lava
-	}
 	m := &g.map_tiles
-	tex := g.assets.terrain[g.level.zone]
+	zone := g.level.zone
+	lava := zone == .Ember
+	tex := g.assets.terrain[zone]
 	x0 := max(0, int(math.floor(view.x / TILE)) - 1)
 	y0 := max(0, int(math.floor(view.y / TILE)) - 1)
 	x1 := min(m.width - 1, int((view.x + view.width) / TILE) + 1)
 	y1 := min(m.height - 1, int((view.y + view.height) / TILE) + 1)
 	frame := int(g.time / LIQUID_FRAME_TIME) % 4
+
+	DEEP :: 7 // tiles down at which it is as dark as it gets
+	deep := lava ? rl.Color{84, 8, 14, 120} : rl.Color{10, 30, 96, 150}
+	shade :: proc(deep: rl.Color, tiles: int) -> rl.Color {
+		c := deep
+		c.a = u8(f32(deep.a) * f32(min(tiles, DEEP)) / DEEP)
+		return c
+	}
+
 	for y in y0 ..= y1 {
 		for x in x0 ..= x1 {
 			if tile_at(m, x, y) != .Water {
 				continue
 			}
 			surface := tile_at(m, x, y - 1) == .Empty
-			col := (frame + x) % 4 + (surface ? 0 : 4)
-			rl.DrawTexturePro(tex, terrain_source(col, ROW_LIQUID), {f32(x) * TILE, f32(y) * TILE, TILE, TILE}, {}, 0, {255, 255, 255, 110})
+			if !lava { // nothing swims in lava
+				col := (frame + x) % 4 + (surface ? 0 : 4)
+				rl.DrawTexturePro(tex, terrain_source(col, ROW_LIQUID), {f32(x) * TILE, f32(y) * TILE, TILE, TILE}, {}, 0, {255, 255, 255, 110})
+			}
+			above := 0
+			for above < DEEP && tile_at(m, x, y - above - 1) == .Water {
+				above += 1
+			}
+			rl.DrawRectangleGradientV(i32(x * TILE), i32(y * TILE), TILE, TILE, shade(deep, above), shade(deep, above + 1))
 		}
 	}
+
+	rl.BeginBlendMode(.ADDITIVE)
+	for y in y0 ..= y1 {
+		for x in x0 - 3 ..= x1 {
+			if tile_at(m, x, y) != .Water || tile_at(m, x, y - 1) != .Empty {
+				continue
+			}
+			px := f32(x) * TILE
+			py := f32(y) * TILE
+			if lava {
+				// The surface is the hottest part: a band of glow along it.
+				pulse := 0.7 + 0.3 * math.sin(g.time * 2.4 + f32(x) * 0.9)
+				hot := rl.Color{u8(150 * pulse), u8(84 * pulse), u8(20 * pulse), 255}
+				rl.DrawRectangleGradientV(i32(px), i32(py) + 2, TILE, 9, hot, {0, 0, 0, 255})
+				rl.DrawRectangleGradientV(i32(px), i32(py) - 9, TILE, 11, {0, 0, 0, 255}, {u8(70 * pulse), u8(30 * pulse), 0, 255})
+				continue
+			}
+			if cell_hash(x, y, 21) % 3 != 0 {
+				continue
+			}
+			// A shaft of daylight, as deep as there is water for it.
+			room := 0
+			for room < 5 && tile_at(m, x + (room + 1) / 3, y + room) == .Water {
+				room += 1
+			}
+			if room < 2 {
+				continue
+			}
+			breathe := 0.6 + 0.4 * math.sin(g.time * 1.1 + f32(x) * 1.3)
+			width := 5 + f32(cell_hash(x, y, 22) % 6)
+			length := f32(room) * TILE - 3
+			SEGMENTS :: 6
+			for seg in 0 ..< SEGMENTS {
+				t0 := f32(seg) / SEGMENTS
+				t1 := f32(seg + 1) / SEGMENTS
+				a := 30 * (1 - t0) * breathe
+				c := rl.Color{u8(a * 0.55), u8(a * 0.9), u8(a), 255}
+				ax := px + 4 + length * t0 * 0.3
+				bx := px + 4 + length * t1 * 0.3
+				ay := py + 3 + length * t0
+				by := py + 3 + length * t1
+				w0 := width * (1 + t0 * 0.8)
+				w1 := width * (1 + t1 * 0.8)
+				tri({ax, ay}, {ax + w0, ay}, {bx + w1, by}, c)
+				tri({ax, ay}, {bx + w1, by}, {bx, by}, c)
+			}
+		}
+	}
+	rl.EndBlendMode()
 }

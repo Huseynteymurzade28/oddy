@@ -83,6 +83,11 @@ when DEV_SHOTS {
 		g.ui.settings = true
 		frames(g, 5)
 		shot(g, "10_settings")
+		visit(g, 1, 2, 20, 30, "13_climb")
+		visit(g, 2, 3, 60, 14, "14_w2")
+		visit(g, 3, 3, 20, 30, "15_w3_climb")
+		visit(g, 3, 4, 70, 12, "16_w3")
+		visit(g, 1, 4, 80, 16, "17_w1_4")
 		visit(g, 1, 2, 8, 52, "11_x")
 		frames(g, 320)
 		shot(g, "12_sleepy")
