@@ -94,6 +94,7 @@ OOZE_WAIT := [BOSS_HP + 1]f32{0.3, 0.45, 0.65, 0.9}
 
 BROOD_SCALE :: 2.4
 BROOD_DIVE_SPEED := [BOSS_HP + 1]f32{330, 330, 290, 250}
+BROOD_DIVE_TIME :: 1.8 // a dive that has found nothing by then gives up
 
 WARDEN_SCALE :: 1.6
 WARDEN_SPEED := [BOSS_HP + 1]f32{260, 260, 215, 175}
@@ -272,10 +273,18 @@ ooze_update :: proc(g: ^Game, b: ^Boss, dt: f32) {
 brood_update :: proc(g: ^Game, b: ^Boss, dt: f32) {
 	m := &g.map_tiles
 	p := &g.player
+	// She keeps to the arena: her sweep never reaches the walls, and nothing
+	// she does takes her out of the level.
+	bounds := tilemap_bounds(m)
+	sweep := clamp(min(b.home.x, bounds.x - b.home.x) - 3 * TILE, 0, 120)
+	defer {
+		b.pos.x = clamp(b.pos.x, 2 * TILE, bounds.x - 2 * TILE)
+		b.pos.y = clamp(b.pos.y, 2 * TILE, bounds.y)
+	}
 	switch b.state {
 	case .Idle:
 		// Sweeping back and forth along the top of the arena.
-		b.pos.x += (b.home.x + math.sin(b.t * 0.9) * 120 - b.pos.x) * min(1, dt * 4)
+		b.pos.x += (b.home.x + math.sin(b.t * 0.9) * sweep - b.pos.x) * min(1, dt * 4)
 		b.pos.y += (b.home.y + math.sin(b.t * 2.3) * 6 - b.pos.y) * min(1, dt * 4)
 		b.dir = math.cos(b.t * 0.9) > 0 ? 1 : -1
 		if b.timer <= 0 {
@@ -301,7 +310,12 @@ brood_update :: proc(g: ^Game, b: ^Boss, dt: f32) {
 		b.squash = {1.1 + 0.08 * math.sin(b.t * 40), 0.9}
 		if b.timer <= 0 {
 			b.state = .Attack
-			d := rl.Vector2Normalize(b.target - b.pos)
+			b.timer = BROOD_DIVE_TIME
+			// A dive is always downward. Aimed at someone above her she
+			// used to fly up and out of the top of the level for good.
+			d := b.target - b.pos
+			d.y = max(d.y, abs(d.x) * 0.45, 24)
+			d = rl.Vector2Normalize(d)
 			b.vel = d * BROOD_DIVE_SPEED[b.hp]
 			if abs(d.x) > 0.05 {
 				b.dir = math.sign(d.x)
@@ -314,7 +328,8 @@ brood_update :: proc(g: ^Game, b: ^Boss, dt: f32) {
 		r = boss_rect(b^)
 		moved2, landed, _ := move_y(m, r, b.vel.y * dt)
 		b.pos.y = moved2.y + r.height
-		if landed || hit_x || b.pos.y > b.target.y + 40 {
+		out := b.pos.x < 2 * TILE || b.pos.x > bounds.x - 2 * TILE || b.pos.y > bounds.y
+		if landed || hit_x || out || b.timer <= 0 || b.pos.y > b.target.y + 40 {
 			b.vel = {}
 			b.state = .Open
 			b.timer = 1.5
@@ -328,7 +343,7 @@ brood_update :: proc(g: ^Game, b: ^Boss, dt: f32) {
 		}
 	case .Recover:
 		// Flaps back up to her perch.
-		up := rl.Vector2{b.home.x + math.sin(b.t * 0.9) * 120, b.home.y} - b.pos
+		up := rl.Vector2{b.home.x + math.sin(b.t * 0.9) * sweep, b.home.y} - b.pos
 		if rl.Vector2Length(up) < 6 {
 			b.state = .Idle
 			b.timer = 1.6 - f32(BOSS_HP - b.hp) * 0.3

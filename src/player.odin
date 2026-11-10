@@ -15,7 +15,7 @@ GROUND_FRICTION :: 1800.0
 AIR_FRICTION :: 400.0
 // Going faster than a run (after a dash or a super jump) bleeds off slowly in
 // the air, so momentum is something you can carry and use.
-AIR_OVERSPEED_DRAG :: 260.0
+AIR_OVERSPEED_DRAG :: 190.0
 GRAVITY :: 950.0
 FALL_GRAVITY :: 1.2 // gravity is a little stronger on the way down: jumps feel less floaty
 // Near the top of a held jump gravity halves, which gives the apex a moment of
@@ -51,9 +51,16 @@ DASH_REFILL_DELAY :: 0.05 // a dash along the floor does not refill itself at on
 
 // Jumping out of a dash that is touching the ground: a super jump from a
 // sideways dash, a lower and longer hyper from a diagonal one down.
-SUPER_X :: 260.0
-HYPER_X :: 320.0
-HYPER_Y_SCALE :: 0.55
+SUPER_X :: 305.0
+HYPER_X :: 380.0
+HYPER_Y_SCALE :: 0.58
+// The jump may come a moment after the dash has run out and still count:
+// the window is the best part of a quarter of a second, not the dash alone.
+SUPER_GRACE :: 0.09
+// Jumping out of an upward dash beside a wall: a kick off it that goes much
+// higher than a wall jump.
+WALL_BOUNCE_X :: 170.0
+WALL_BOUNCE_Y :: 470.0
 
 // Swimming, in any world but the one where the liquid is lava.
 SWIM_SINK :: 280.0 // gravity in water
@@ -332,8 +339,10 @@ player_update :: proc(g: ^Game, dt: f32) {
 	// --- jumping -------------------------------------------------------------
 	if p.jump_buffer > 0 && !swimming {
 		near_wall := wall_side(m, grow_x(r, WALL_JUMP_REACH))
+		// Still in the dash, or only just out of it.
+		in_dash := dashing || p.since_dash < DASH_TIME + SUPER_GRACE
 		switch {
-		case dashing && (p.grounded || p.coyote > 0) && p.dash_dir.y >= 0 && p.dash_dir.x != 0:
+		case in_dash && (p.grounded || p.coyote > 0) && p.dash_dir.y >= 0 && p.dash_dir.x != 0:
 			// Super (sideways dash) or hyper (diagonal down): the dash turns
 			// into a long, fast jump and gives the dash straight back.
 			p.dash_time = 0
@@ -351,6 +360,18 @@ player_update :: proc(g: ^Game, dt: f32) {
 			p.stretch = STRETCH_JUMP
 			spawn_burst(g, p.pos, {200, 220, 190, 255}, 4, 50, 0.8)
 			play(a, .Jump)
+		case in_dash && near_wall != 0 && !p.grounded && p.dash_dir.y < 0 && p.dash_dir.x == 0:
+			// A wall bounce: the upward dash carries on up the wall.
+			p.dash_time = 0
+			dashing = false
+			p.vel = {-near_wall * WALL_BOUNCE_X, -WALL_BOUNCE_Y}
+			p.wall_stick = WALL_STICK_TIME * 1.5
+			p.wall_dir = 0
+			p.flip = near_wall > 0
+			start_jump(p)
+			p.stretch = {0.72, 1.32}
+			spawn_burst(g, {p.pos.x + near_wall * PLAYER_W / 2, p.pos.y - PLAYER_H / 2}, {230, 240, 255, 255}, 7, 90, 1.0)
+			play(a, .Bounce)
 		case near_wall != 0 && !p.grounded:
 			// A wall jump cancels a dash that is still running, so you can
 			// dash into a wall and kick straight off it.
