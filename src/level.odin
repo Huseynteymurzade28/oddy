@@ -38,6 +38,10 @@ Level :: struct {
 	exit:        rl.Vector2,
 	secret_exit: rl.Vector2, // zero for none
 	checkpoints: [dynamic]Checkpoint,
+	rooms:       []rl.Rectangle, // borrowed too; see `rooms.odin`
+	spawns:      []rl.Vector2,
+	room:        int, // the one you are in, -1 for none
+	has_light:   bool, // there are light or shadow blocks in it
 	fruit:       [dynamic]Fruit,
 	kept:        u64, // fruit kept on this attempt, bit per fruit
 	gems:        [dynamic]Gem,
@@ -148,6 +152,8 @@ level_enter :: proc(g: ^Game, wanted: int) {
 		name  = d.name,
 		zone  = d.zone,
 		hints = d.hints[:],
+		rooms = d.rooms[:],
+		spawns = d.spawns[:],
 		spawn       = d.spawn,
 		exit        = d.exit,
 		secret_exit = d.secret_exit,
@@ -165,6 +171,9 @@ level_enter :: proc(g: ^Game, wanted: int) {
 		})
 	}
 	g.exit_anim = {}
+	for t in d.tiles {
+		g.level.has_light ||= t == .Lit || t == .Dark
+	}
 	decor_scatter(g)
 	lighting_bake(g)
 	level_restart(g)
@@ -233,6 +242,8 @@ level_restart :: proc(g: ^Game) {
 	clear(&g.sparks)
 	level_reset_things(g)
 	player_init(&g.player, g.respawn)
+	light_reset()
+	rooms_reset(g)
 	camera_snap(g)
 }
 
@@ -332,7 +343,7 @@ gems_update :: proc(g: ^Game, dt: f32) {
 // Breaks the crate at a tile, if there is one: splinters, a thump, and its
 // gems straight into your count. Returns whether it broke anything.
 crate_break :: proc(g: ^Game, tx, ty: int, push: rl.Vector2) -> bool {
-	if tile_at(&g.map_tiles, tx, ty) != .Crate {
+	if tile_at(&g.map_tiles, tx, ty) != .Crate || sim_quiet {
 		return false
 	}
 	tile_set(&g.map_tiles, tx, ty, .Empty)

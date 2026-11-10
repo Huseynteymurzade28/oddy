@@ -27,6 +27,9 @@ Sfx :: enum {
 	Menu_Select,
 	Gem,
 	Crate,
+	Light_On,
+	Light_Off,
+	Room,
 }
 
 @(private = "file")
@@ -50,6 +53,9 @@ SFX_FILES := [Sfx]struct {
 	.Menu_Select = {"menu_select", 0.45},
 	.Gem         = {"gem", 0.4},
 	.Crate       = {"crate", 0.6},
+	.Light_On    = {"light_on", 0.4},
+	.Light_Off   = {"light_off", 0.4},
+	.Room        = {"room", 0.4},
 }
 
 // Sounds that repeat a lot are played a hair off pitch each time, so a run of
@@ -389,12 +395,18 @@ assets_use_skin :: proc(a: ^Assets, skin: Skin) {
 
 // The same sound at a chosen pitch: a run of gems climbs the scale.
 play_pitched :: proc(a: ^Assets, s: Sfx, pitch: f32) {
+	if sim_quiet {
+		return
+	}
 	rl.SetSoundPitch(a.sfx[s], pitch)
 	rl.SetSoundVolume(a.sfx[s], SFX_FILES[s].volume * sound_scale)
 	rl.PlaySound(a.sfx[s])
 }
 
 play :: proc(a: ^Assets, s: Sfx) {
+	if sim_quiet {
+		return
+	}
 	if s in SFX_VARY {
 		rl.SetSoundPitch(a.sfx[s], rand.float32_range(0.93, 1.07))
 	}

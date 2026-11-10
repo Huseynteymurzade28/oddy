@@ -298,6 +298,19 @@ gather_lights :: proc(g: ^Game) {
 		}
 	}
 
+	// Light blocks, while they are there, are lamps.
+	if g.level.has_light && light_solid[.Lit] {
+		x0, y0 := int(view.x / TILE) - 1, int(view.y / TILE) - 1
+		x1, y1 := int((view.x + view.width) / TILE) + 1, int((view.y + view.height) / TILE) + 1
+		for y in y0 ..= y1 {
+			for x in x0 ..= x1 {
+				if (x + y) % 2 == 0 && tile_at(&g.map_tiles, x, y) == .Lit {
+					light({f32(x) * TILE + 8, f32(y) * TILE + 8}, 30, {120, 96, 50, 255})
+				}
+			}
+		}
+	}
+
 	// Lit lanterns light the dark round them; the trophy at the end always
 	// glows.
 	for c in g.level.checkpoints {

@@ -19,6 +19,8 @@ when !IS_MOBILE {
 	main :: proc() {
 		when DEV_SHOTS {
 			dev_shots_main()
+		} else when DEV_SOLVE {
+			dev_solve_main()
 		} else {
 			run()
 		}

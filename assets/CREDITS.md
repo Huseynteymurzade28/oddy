@@ -30,6 +30,9 @@ ruins, volcanoes, hills and trees) and `sprites/fx/` (the gem, butterflies and
 birds) are this project's own, drawn pixel by pixel by
 `tools/art/make_art.py` from the palettes in `tools/art/palette.py`.
 
+`sounds/light_on.wav`, `sounds/light_off.wav` and `sounds/room.wav` are this
+project's own too, made by `tools/audio/make_sfx.py`.
+
 ## Not under `assets/`
 
 - **raylib** 6.0, linked statically from `libs/raylib/` — Ramon Santamaria

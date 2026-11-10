@@ -14,9 +14,12 @@ What the project has to contain (and does, as LDtk saves it):
 
   Collision  an IntGrid layer, 16px cells:
                1 rock   2 one-way platform   3 spikes   4 water   5 crate
+               6 light block   7 shadow block (see `light.odin`)
   Entities   an Entities layer with
                Player_Start  where you start; one per level
                Checkpoint    a flag you respawn at once touched
+               Room, Spawn   a room's rectangle, and where you come back
+                             to life in it (see `rooms.odin`)
                Exit          the flag that finishes the level
                Hint          a line of text in the world (field `Text`)
                Gem, Gem_Line a gem; a row of gems along the rectangle
@@ -61,6 +64,8 @@ Level_Data :: struct {
 	spawn:       rl.Vector2,
 	exit:        rl.Vector2,
 	checkpoints: [dynamic]rl.Vector2,
+	rooms:       [dynamic]rl.Rectangle, // none: the whole level is one room
+	spawns:      [dynamic]rl.Vector2, // where a room gives you back, feet
 	hints:       [dynamic]Hint,
 	things:      [dynamic]Thing_Data, // traps, moving pieces and creatures
 }
@@ -81,6 +86,8 @@ level_data_destroy :: proc(d: ^Level_Data) {
 	delete(d.name)
 	delete(d.tiles)
 	delete(d.checkpoints)
+	delete(d.rooms)
+	delete(d.spawns)
 	for h in d.hints {
 		delete(h.text)
 	}
@@ -180,6 +187,10 @@ read_level :: proc(lv: json.Value) -> (d: Level_Data, ok: bool) {
 				case 5:
 					d.tiles[i] = .Crate
 					d.crates += 1
+				case 6:
+					d.tiles[i] = .Lit
+				case 7:
+					d.tiles[i] = .Dark
 				}
 			}
 			ok = true
@@ -207,6 +218,10 @@ read_level :: proc(lv: json.Value) -> (d: Level_Data, ok: bool) {
 					d.spawn = pos
 				case "Checkpoint":
 					append(&d.checkpoints, pos)
+				case "Spawn":
+					append(&d.spawns, pos)
+				case "Room":
+					append(&d.rooms, read_thing(e, .Saw, pos).rect) // only for its rectangle
 				case "Exit":
 					d.exit = pos
 				case "Fruit":

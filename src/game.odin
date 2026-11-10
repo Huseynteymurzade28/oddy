@@ -56,8 +56,13 @@ Game :: struct {
 	time:         f32, // wall clock, keeps running on menus
 	shake:        f32,
 	freeze:       f32, // a few hundredths of a second where nothing moves
+	flash:        f32, // a wash of colour over the whole picture, fading: see `game_flash`
+	flash_colour: rl.Color,
+	kick:         rl.Vector2, // the camera thrown a few pixels by a dash, springing back
 	camera:       rl.Camera2D,
 	camera_lead:  f32, // how far the camera runs ahead, eased toward the speed
+	room_slide:   f32, // 1 down to 0 while the camera crosses to the next room
+	room_from:    rl.Vector2, // where it was looking when the crossing began
 	fade:         f32, // the fade from dark after a change of screen
 	exit_anim:    Animator, // the trophy at the end, once pressed
 
@@ -114,6 +119,8 @@ game_update :: proc(g: ^Game, dt: f32) {
 	g.time += dt
 	g.state_time += dt
 	g.fade = max(0, g.fade - dt)
+	g.flash = max(0, g.flash - dt)
+	g.kick -= g.kick * min(1, dt * 14)
 	music_update(g, dt)
 	when DEV_SHOTS {
 		g.input = dev_input
@@ -169,12 +176,18 @@ game_update_play :: proc(g: ^Game, dt: f32) {
 		g.freeze -= dt
 		return
 	}
+	// And while the camera crosses from one room to the next.
+	if g.room_slide > 0 {
+		g.room_slide = max(0, g.room_slide - dt / ROOM_SLIDE)
+		return
+	}
 	g.level_intro = max(0, g.level_intro - dt)
 	if !g.player.dead {
 		g.level_time += dt
 	}
 	things_update(g, dt)
 	player_update(g, dt)
+	rooms_update(g)
 	enemies_update(g, dt)
 	boss_update(g, dt)
 	waves_update(g, dt)
@@ -188,6 +201,15 @@ game_update_play :: proc(g: ^Game, dt: f32) {
 }
 
 FADE_TIME :: 0.3
+FLASH_TIME :: 0.16
+
+// Washes the whole picture with a colour for a moment: white for a death,
+// gold or violet as the light comes and goes. The colour's alpha is how
+// strong it starts.
+game_flash :: proc(g: ^Game, colour: rl.Color) {
+	g.flash = FLASH_TIME
+	g.flash_colour = colour
+}
 
 game_set_state :: proc(g: ^Game, state: Game_State) {
 	// Between the title, the map and a level, a quick fade from dark; into
@@ -246,8 +268,14 @@ draw_world :: proc(g: ^Game, cam: rl.Camera2D, view: rl.Rectangle) {
 	}
 	level_draw_hints(g)
 	popups_draw(g)
+	rooms_draw_shade(g, view)
 	rl.EndMode2D()
 	foreground_draw(g)
+	if g.flash > 0 {
+		c := g.flash_colour
+		c.a = u8(f32(c.a) * g.flash / FLASH_TIME)
+		rl.DrawRectangle(0, 0, rl.GetScreenWidth(), rl.GetScreenHeight(), c)
+	}
 }
 
 game_draw :: proc(g: ^Game) {
@@ -258,7 +286,7 @@ game_draw :: proc(g: ^Game) {
 		shake = {rand.float32_range(-g.shake, g.shake), rand.float32_range(-g.shake, g.shake)}
 	}
 	cam := g.camera
-	cam.offset += shake
+	cam.offset += shake - g.kick * cam.zoom
 	// On whole screen pixels, or the seams between tiles show as the camera
 	// drifts.
 	cam.target.x = math.round(cam.target.x * cam.zoom) / cam.zoom

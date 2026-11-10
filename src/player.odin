@@ -8,24 +8,26 @@ import rl "../libs/raylib"
 PLAYER_W :: 10
 PLAYER_H :: 22
 
-RUN_SPEED :: 138.0
-GROUND_ACCEL :: 1500.0
-AIR_ACCEL :: 1000.0
-GROUND_FRICTION :: 1800.0
-AIR_FRICTION :: 400.0
+RUN_SPEED :: 160.0
+GROUND_ACCEL :: 1900.0
+AIR_ACCEL :: 1300.0
+GROUND_FRICTION :: 2200.0
+AIR_FRICTION :: 500.0
 // Going faster than a run (after a dash or a super jump) bleeds off slowly in
 // the air, so momentum is something you can carry and use.
-AIR_OVERSPEED_DRAG :: 190.0
-GRAVITY :: 950.0
-FALL_GRAVITY :: 1.2 // gravity is a little stronger on the way down: jumps feel less floaty
+AIR_OVERSPEED_DRAG :: 220.0
+// Heavy and quick rather than floaty: the same heights as a gentler gravity
+// would give, reached and left in two thirds of the time.
+GRAVITY :: 1500.0
+FALL_GRAVITY :: 1.1 // gravity is a little stronger on the way down: jumps feel less floaty
 // Near the top of a held jump gravity halves, which gives the apex a moment of
 // hang time to line up a dash.
 APEX_GRAVITY :: 0.5
-APEX_WINDOW :: 40.0
-MAX_FALL :: 430.0
+APEX_WINDOW :: 50.0
+MAX_FALL :: 460.0
 
-// A jump clears 4.5 tiles and about 6 across at a run.
-JUMP_VELOCITY :: 375.0
+// A jump clears 4.5 tiles and about 7 across at a run.
+JUMP_VELOCITY :: 470.0
 JUMP_CUT :: 0.5 // fraction of upward speed kept when jump is released early
 MIN_JUMP_HOLD :: 0.08 // a tap shorter than this still gives a short hop, not nothing
 COYOTE_TIME :: 0.1 // grace period for jumping after walking off a ledge
@@ -33,34 +35,35 @@ JUMP_BUFFER :: 0.12 // how early a jump press still counts on landing
 LEDGE_ASSIST :: 9 // pixels: a jump that ends just short of a ledge is lifted onto it
 CORNER_NUDGE :: 5 // pixels: a head that clips a corner slides past it instead
 
-WALL_SLIDE_SPEED :: 62.0
-WALL_JUMP_X :: 200.0
-WALL_JUMP_Y :: 340.0
+WALL_SLIDE_SPEED :: 70.0
+WALL_JUMP_X :: 230.0
+WALL_JUMP_Y :: 427.0
 WALL_STICK_TIME :: 0.14 // how long a wall jump overrides the steering input
 WALL_JUMP_REACH :: 3 // pixels: a wall this close still counts for a wall jump
 
 // The dash: a fixed burst in one of eight directions, with gravity switched
 // off for its length. One per time in the air, refilled by standing on
 // ground. It covers about four tiles on its own.
-DASH_SPEED :: 320.0
+DASH_SPEED :: 400.0
 DASH_TIME :: 0.15
-DASH_END_SPEED :: 180.0 // what is left of it afterwards
+DASH_END_SPEED :: 230.0 // what is left of it afterwards
 DASH_BUFFER :: 0.1
 DASH_FREEZE :: 0.045 // the world stops for a beat when a dash starts
 DASH_REFILL_DELAY :: 0.05 // a dash along the floor does not refill itself at once
+DASH_COOLDOWN :: 0.3 // from one dash starting to the next: no skating along the floor on dashes
 
 // Jumping out of a dash that is touching the ground: a super jump from a
 // sideways dash, a lower and longer hyper from a diagonal one down.
-SUPER_X :: 305.0
-HYPER_X :: 380.0
+SUPER_X :: 400.0
+HYPER_X :: 500.0
 HYPER_Y_SCALE :: 0.58
 // The jump may come a moment after the dash has run out and still count:
 // the window is the best part of a quarter of a second, not the dash alone.
 SUPER_GRACE :: 0.09
 // Jumping out of an upward dash beside a wall: a kick off it that goes much
 // higher than a wall jump.
-WALL_BOUNCE_X :: 170.0
-WALL_BOUNCE_Y :: 470.0
+WALL_BOUNCE_X :: 190.0
+WALL_BOUNCE_Y :: 590.0
 
 // Swimming, in any world but the one where the liquid is lava.
 SWIM_SINK :: 280.0 // gravity in water
@@ -68,7 +71,7 @@ SWIM_MAX_SINK :: 70.0
 SWIM_SPEED :: 100.0
 SWIM_ACCEL :: 700.0
 SWIM_STROKE :: 175.0 // a press of jump: a stroke upward
-SWIM_LEAP :: 340.0 // a stroke at the surface throws you out
+SWIM_LEAP :: 427.0 // a stroke at the surface throws you out
 
 DEATH_TIME :: 0.5 // from the hit to being back at the checkpoint
 RESPAWN_TIME :: 0.32 // the puff you arrive in; the body shows once it clears
@@ -232,12 +235,16 @@ player_update :: proc(g: ^Game, dt: f32) {
 	} else {
 		p.still_time = 0
 	}
-	if g.save.settings.endless_dash && p.dash_time <= 0 {
-		p.dashes = 1 // the comfort setting: the dash never runs out
+	// The comfort setting: the dash never runs out. Not where the light is
+	// a switch, though: there it would leave the shadow blocks out for good.
+	if g.save.settings.endless_dash && !g.level.has_light && p.dash_time <= 0 {
+		p.dashes = 1
 	}
-	if p.dash_buffer > 0 && p.dashes > 0 && p.dash_time <= 0 {
+	light_sync(g)
+	if p.dash_buffer > 0 && p.dashes > 0 && p.dash_time <= 0 && p.since_dash >= DASH_COOLDOWN {
 		p.dash_buffer = 0
 		p.dashes -= 1
+		light_sync(g)
 		p.dash_dir = dash_direction(p, in_)
 		p.dash_time = DASH_TIME
 		p.since_dash = 0
@@ -249,6 +256,7 @@ player_update :: proc(g: ^Game, dt: f32) {
 		}
 		g.freeze = DASH_FREEZE
 		g.shake = max(g.shake, 2.5)
+		g.kick = p.dash_dir * 6
 		spawn_burst(g, player_centre(p^), {200, 230, 255, 255}, 8, 90, 1.0)
 		animator_restart(&p.anim, &a.player.double_jump)
 		// Stretched along the dash: long and thin sideways, tall going up.
@@ -340,7 +348,7 @@ player_update :: proc(g: ^Game, dt: f32) {
 	if p.jump_buffer > 0 && !swimming {
 		near_wall := wall_side(m, grow_x(r, WALL_JUMP_REACH))
 		// Still in the dash, or only just out of it.
-		in_dash := dashing || p.since_dash < DASH_TIME + SUPER_GRACE
+		in_dash := (dashing || p.since_dash < DASH_TIME + SUPER_GRACE) && !sim_plain
 		switch {
 		case in_dash && (p.grounded || p.coyote > 0) && p.dash_dir.y >= 0 && p.dash_dir.x != 0:
 			// Super (sideways dash) or hyper (diagonal down): the dash turns
@@ -519,7 +527,7 @@ player_update :: proc(g: ^Game, dt: f32) {
 		p.coyote = COYOTE_TIME
 	}
 	p.grounded = grounded
-	if p.grounded && p.since_dash > DASH_REFILL_DELAY && p.dashes < 1 && p.dash_time <= 0 {
+	if p.grounded && p.since_dash > DASH_REFILL_DELAY && p.dashes < 1 && p.dash_time <= 0 && !standing_on_shadow(m, r) {
 		player_refill_dash(p)
 	}
 	p.pos = {r.x + PLAYER_W / 2, r.y + PLAYER_H}
@@ -703,8 +711,10 @@ player_kill :: proc(g: ^Game) {
 	p.death_timer = DEATH_TIME
 	p.dash_time = 0
 	g.deaths += 1
-	g.shake = max(g.shake, 6)
-	g.freeze = 0.06
+	g.shake = max(g.shake, 7)
+	g.freeze = 0.09
+	g.kick = {}
+	game_flash(g, {255, 255, 255, 120})
 	c := player_centre(p^)
 	spawn_burst(g, c, {255, 255, 255, 255}, 18, 170, 1.6)
 	spawn_burst(g, c, {255, 120, 120, 255}, 12, 110, 1.2)
@@ -718,6 +728,7 @@ player_kill :: proc(g: ^Game) {
 player_respawn :: proc(g: ^Game) {
 	level_reset_things(g)
 	player_init(&g.player, g.respawn)
+	light_sync(g)
 	spawn_poof(g, &g.assets.player.appear, g.player.pos)
 	spawn_burst(g, player_centre(g.player), {200, 230, 255, 255}, 12, 80, 1.0)
 	play(&g.assets, .Respawn)

@@ -116,6 +116,7 @@ hud_draw :: proc(g: ^Game) {
 		draw_iris(g)
 		draw_stats(g)
 		draw_level_name(g)
+		rooms_draw_pips(g)
 		boss_hud_draw(g)
 		when TOUCH_CONTROLS {
 			draw_touch_controls(g)

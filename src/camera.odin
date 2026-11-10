@@ -44,15 +44,16 @@ camera_goal :: proc(g: ^Game) -> rl.Vector2 {
 camera_clamp :: proc(g: ^Game) {
 	view := view_size()
 	half := view / 2
-	bounds := tilemap_bounds(&g.map_tiles)
-	axis :: proc(v, half, size: f32) -> f32 {
+	// Inside the room you are in; a room smaller than the screen is centred.
+	bounds := room_bounds(g)
+	axis :: proc(v, half, from, size: f32) -> f32 {
 		if size <= half * 2 {
-			return size / 2
+			return from + size / 2
 		}
-		return clamp(v, half, size - half)
+		return clamp(v, from + half, from + size - half)
 	}
-	g.camera.target.x = axis(g.camera.target.x, half.x, bounds.x)
-	g.camera.target.y = axis(g.camera.target.y, half.y, bounds.y)
+	g.camera.target.x = axis(g.camera.target.x, half.x, bounds.x, bounds.width)
+	g.camera.target.y = axis(g.camera.target.y, half.y, bounds.y, bounds.height)
 }
 
 @(private = "file")
@@ -73,6 +74,16 @@ camera_snap :: proc(g: ^Game) {
 camera_update :: proc(g: ^Game, dt: f32) {
 	camera_fit(g)
 	wanted := camera_goal(g)
+	if g.room_slide > 0 {
+		// Crossing to the next room: a smooth run from where it was looking
+		// to where the new room wants it.
+		g.camera.target = wanted
+		camera_clamp(g)
+		k := 1 - g.room_slide
+		k = k * k * (3 - 2 * k)
+		g.camera.target = g.room_from + (g.camera.target - g.room_from) * k
+		return
+	}
 	// A respawn far from where you died cuts rather than pans: the trip back
 	// is not worth watching for the hundredth time.
 	if rl.Vector2Distance(wanted, g.camera.target) > view_size().x {

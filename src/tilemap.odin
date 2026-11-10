@@ -15,6 +15,8 @@ Tile :: enum u8 {
 	Water, // hazard, does not block movement
 	Spike, // hazard on the side it points to; see `spike_hitbox`
 	Crate, // solid until a dash or a head breaks it; see `crate_break`
+	Lit, // solid only while Lumi's light is burning; see `light.odin`
+	Dark, // solid only while it is spent
 }
 
 Tilemap :: struct {
@@ -52,7 +54,7 @@ tile_set :: proc(m: ^Tilemap, x, y: int, t: Tile) {
 }
 
 is_blocking :: proc(t: Tile) -> bool {
-	return t == .Rock || t == .Deep || t == .Moss || t == .Crate
+	return t == .Rock || t == .Deep || t == .Moss || t == .Crate || (t == .Lit && light_solid[.Lit]) || (t == .Dark && light_solid[.Dark])
 }
 
 // Ground for the look of things: what the autotiler joins up. A crate is
@@ -136,7 +138,7 @@ tilemap_touches_hazard :: proc(m: ^Tilemap, r: rl.Rectangle, liquid_kills: bool)
 				if rl.CheckCollisionRecs(r, spike_hitbox(m, tx, ty)) {
 					return true
 				}
-			case .Empty, .Rock, .Deep, .Moss, .Platform, .Crate:
+			case .Empty, .Rock, .Deep, .Moss, .Platform, .Crate, .Lit, .Dark:
 			}
 		}
 	}
@@ -234,6 +236,8 @@ tilemap_draw :: proc(g: ^Game, view: rl.Rectangle) {
 				draw_spike(g, x, y)
 			case .Crate:
 				draw(tex, 8, ROW_LIQUID, x, y)
+			case .Lit, .Dark:
+				// drawn afterwards, over the grass: see `light_blocks_draw`
 			case .Empty:
 			}
 		}
@@ -255,6 +259,7 @@ tilemap_draw :: proc(g: ^Game, view: rl.Rectangle) {
 			}
 		}
 	}
+	light_blocks_draw(g, x0, y0, x1, y1)
 }
 
 // Pixel Adventure's spikes point up from the bottom of their cell; any other

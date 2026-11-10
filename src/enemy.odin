@@ -44,7 +44,7 @@ ENEMY_TRAITS := [Enemy_Kind]Enemy_Traits {
 	.Bee   = {{16, 16}, 0, true},
 }
 
-STOMP_BOUNCE :: 330.0
+STOMP_BOUNCE :: 415.0
 STOMP_MARGIN :: 7.0 // feet this far into the top of a creature still count as above it
 RINO_SIGHT :: 170.0
 RINO_WIND_UP :: 0.35
