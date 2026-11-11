@@ -4,16 +4,20 @@ A cozy, hard little platformer for Android phones. Lumi is a small light, and
 the Hollow under the town of Greyreach goes down in layers: a garden, a
 drowned town, a warm heart of embers, each with something keeping the way
 down. Dash, wall-jump, swim and bounce your way to the bottom; one touch of
-anything sharp and you are back at the last lantern, with the clock still
-running.
+anything sharp and you are back at the start of the room, or at the last
+lantern, with the clock still running.
+
+Her light is her dash, and the dash is a switch: light blocks are solid while
+she shines, shadow blocks only while her dash is spent.
 
 Built in [Odin](https://odin-lang.org) on [raylib](https://www.raylib.com), as
 a NativeActivity with no Java.
 
 | | |
 |---|---|
-| ![First steps](media/first_steps.png) | ![Saws, fire and a rino](media/traps.png) |
-| ![A moving platform under a bat](media/platform.png) | ![Up a fan, over spikes](media/fan.png) |
+| ![The title](media/title.png) | ![The world map](media/map.png) |
+| ![A wall of light, solid while the dash is ready](media/light.png) | ![The same room mid-dash: the light is open air](media/light_spent.png) |
+| ![Swimming in the Drowned Halls](media/swim.png) | ![The Ember Deep](media/ember.png) |
 
 ## Play it
 
@@ -37,7 +41,8 @@ a death and at the end of a level.
 
 **Settings** (on the title and the pause card): music and sound volume,
 vibration, and two comforts for a gentler game: a slower game speed (down to
-55%, the clock slows with it) and a dash that never runs out.
+55%, the clock slows with it) and a dash that never runs out (not in levels
+with light and shadow blocks, where the dash running out is the puzzle).
 
 On the world map, tap a level to pick it and tap it again (or PLAY) to go;
 the arrows by the title turn to the next world, HERO picks who you play as.
@@ -45,8 +50,9 @@ On a keyboard: left and right, `Q` `E` for worlds, `Enter`, `H`, `Esc`.
 
 ## The worlds
 
-- **The Moss** (1-1 to 1-5): the basics, trampolines, fans, creatures, and at
-  the end the Ooze King.
+- **The Moss** (1-1 to 1-5): four levels of rooms, 22 in all, each a screen
+  with one idea in it: the basics, walls, then light and shadow blocks, a
+  climb, a gauntlet. At the end, the Ooze King.
 - **The Drowned Halls** (2-1 to 2-5): water you can swim in. You sink
   slowly, jump strokes you upward, a stroke at the surface throws you out,
   and the water gives your dash back. Underwater tunnels, walls to dive
@@ -54,6 +60,26 @@ On a keyboard: left and right, `Q` `E` for worlds, `Enter`, `H`, `Esc`.
 - **The Ember Deep** (3-1 to 3-5): the liquid is lava and kills. Geysers
   bubble, then erupt and throw you high; fire, saws over lava, a climb up a
   chimney of ash, a gauntlet of everything, and the Warden.
+
+Worlds 2 and 3 are still the older, scrolling kind of level; they are next
+in line to be rebuilt as rooms.
+
+## Rooms and light
+
+- **Rooms.** A level can be cut into rooms, each about a screen. The camera
+  stays in the room you are in and slides across to the next; the world holds
+  still while it does, and you arrive with your dash back. Die and you are
+  back at that room's entrance, with everything in it as it was. The pips at
+  the top of the screen count the rooms.
+- **Light blocks** are solid while the dash is ready, and open air while it
+  is spent. **Shadow blocks** are the other way round. So a dash opens the
+  bright wall in front of you, takes the bright floor from behind you, and
+  makes the dark ledge you are about to need; and anything that hands the
+  dash back in mid-air (a refill, a trampoline, a creature's head) throws the
+  switch back while you are still flying.
+- **Two rules keep it fair.** Standing on a shadow block does not bring the
+  dash back, or it would vanish under you. And nothing closes on you: a block
+  that ought to turn solid where you are standing waits until you have left.
 
 ## Bosses
 
@@ -75,7 +101,11 @@ shut until it is down; dying puts it back at full strength.
   where they will land, and always behind you, so stepping out from under
   them takes you toward it.
 
-While a boss is stunned, or recovering, bumping into it is harmless.
+While a boss is stunned, or recovering, bumping into it is harmless. Every
+hit buys a breather: the rocks and ripples already on their way are called
+off, you are thrown clear (away from the wall, if it has its back to one),
+and it cannot hurt you until you have got off it. The last hit is final, even
+if something gets you before it has finished falling over.
 
 ## Things to find and break
 
@@ -105,9 +135,11 @@ While a boss is stunned, or recovering, bumping into it is harmless.
 
 ## Movement
 
-- **The dash.** One per time in the air, back when you land; the body turns
-  blue while it is spent and flashes when it comes back. Eight directions,
-  about four tiles on its own, and the world stops for a beat when it starts.
+- **The dash.** One per time in the air, back when you land; Lumi's glow
+  turns from gold to a pale blue while it is spent and flashes when it comes
+  back. Eight directions, about four tiles on its own, and the world stops
+  for a beat when it starts. A third of a second between one dash and the
+  next.
 - **Super and hyper jumps.** Jump while a sideways dash is still touching the
   ground and it becomes a long, fast jump; from a dash diagonally down it is a
   lower, longer one. Either gives the dash straight back.
@@ -124,30 +156,19 @@ While a boss is stunned, or recovering, bumping into it is harmless.
 ## Where it is
 
 The project started as Oddy, a procedural run-based shooter for desktop (that
-version is tagged `shooter-final`). It is being rebuilt as a hand-made world-map
-platformer for phones: three worlds of five levels each, the last of each a
-boss you beat without a gun.
+version is tagged `shooter-final`), and was rebuilt as a hand-made world-map
+platformer for phones. It is playable start to finish: three worlds of five
+levels, a secret level, three bosses, a map, a save, music.
 
-1. **Movement** — done: coyote time, jump buffering, variable jump height,
-   wall jumps, an 8-way dash, super and hyper jumps, one-hit deaths with an
-   instant respawn.
-2. **LDtk levels** — done: `levels/lumi.ldtk`.
-3. **Traps, moving pieces and creatures** — done: saws, moving and falling
-   platforms, trampolines, fans, fire, arrow shooters, dash balloons, a
-   spiked head that drops on you; pigs, slimes, rinos, bats and bees to land
-   on. Levels 1-1 to 1-3.
-4. **Feel** — done: squash and stretch, dust, puffs to vanish and arrive in,
-   an iris on every death and respawn, CC0 sound effects, vibration, gems,
-   crates, combos, confetti, butterflies and birds, flowers in the breeze.
-5. **The map** — done: the world map, saving, fruit, medals, secret exits
-   (1-1 hides one, into the secret level 1-S), four heroes.
-6. **Levels and bosses** — done: three worlds of five levels, a secret
-   level, swimming, geysers, and three bosses.
-7. **Polish** — done: a track per world and one for the bosses
-   (crossfading, quieter while paused), a story told in a few lines on the
-   map and at the very end, fades between screens, and a launcher icon of
-   the hero dashing over the meadow.
-8. The name.
+What is being worked on now:
+
+- **Rooms for Worlds 2 and 3.** World 1 has been rebuilt as hard, screen-sized
+  rooms around the light and shadow blocks. The other two worlds, the secret
+  level and the boss arenas are still as they were, and have only been
+  retuned for the heavier, quicker movement that came with the rooms.
+- **Art.** Heroes, creatures and traps are Pixel Adventure's; they are to be
+  redrawn before any store release.
+- **Sound.** Most effects and all the music are CC0 packs.
 
 ## Building
 
@@ -183,19 +204,45 @@ odin run src -out:lumi -define:TOUCH=true   # the phone's touch layout, with the
 Run it from the repo root (asset paths are relative). `F5` reads the levels
 file again, `F11` toggles fullscreen.
 
-`tools/dev/shots.sh` builds a screenshot mode (`-define:SHOTS=true`, see
-`src/devshots.odin`) that plays a fixed script and saves pictures to
-`build/shots/`; add `-define:TOUCH=true` for the phone's layout.
+Three more builds of the same code, for checking it without playing it:
+
+| | |
+|---|---|
+| `tools/dev/shots.sh` | plays a fixed script and saves pictures to `build/shots/` (`-define:SHOTS=true`, `src/devshots.odin`); add `-define:TOUCH=true` for the phone's layout |
+| `tools/dev/solve.sh` | gets through every room by brute force, once with plain moves and once with every trick, and names any room it cannot (`-define:SOLVE=true`, `src/devsolve.odin`). `tools/dev/solve.sh W1_2` checks one level; `TRACE=1 build/lumi_solve W1_2` prints the route |
+| `tools/dev/soak.sh` | plays every level with a button-mashing hero for hours of game time in a few seconds, looking for ways to get stuck: a boss out of its arena or stuck in one state, a fight that cannot be finished, an exit that stays shut, a death with no respawn (`-define:SOAK=true`, `src/devsoak.odin`). `TRACE=1 build/lumi_soak W2_5` prints each fight |
+
+Run the soak after touching a boss, and the solver after touching a room or
+the movement.
 
 ## Editing levels
 
 The levels live in one [LDtk](https://ldtk.io) project, `levels/lumi.ldtk`,
-and are played in the order LDtk lists them. Open it in LDtk 1.5, draw, save,
-and press `F5` in the running game: it reads the file again and restarts the
+and are played in the order LDtk lists them. There are two ways to make one.
+
+**As text**, for levels made of rooms. Each is a file in `levels/rooms/`
+named after its level (`W1_2.txt`): a few `key: value` lines (`name`, `par`,
+`zone`), then its rooms, thirty characters by fifteen rows each, introduced
+by `===`:
+
+```
+#  rock          =  one-way platform   ^  spikes        ~  water    C  crate
+L  light block   D  shadow block       @  spawn point   E  exit     X  secret exit
+o  gem           F  fruit              R  dash refill   T  trampoline
+S  saw           ff falling platform   P  pig   B  bat   M  slime
+```
+
+`tools/levels/build.py` writes them into the LDtk file, leaving every other
+level alone (the top of that script has the whole format).
+`tools/dev/solve.sh` runs it first, so solving a level also rebuilds it.
+
+**In LDtk**, for everything else: open the file in LDtk 1.5, draw, save, and
+press `F5` in the running game. It reads the file again and restarts the
 level you are on.
 
 - **Collision** (IntGrid, 16px): `1` rock, `2` one-way platform, `3` spikes
-  (they point away from the rock beside them), `4` water, `5` crate. Only the shape is
+  (they point away from the rock beside them), `4` water, `5` crate, `6` light
+  block, `7` shadow block. Only the shape is
   drawn; the game picks the grass, edges and corners itself from which
   neighbours are rock.
 - **Entities**: `Player_Start` (one per level), `Checkpoint`, `Exit` (the
@@ -227,6 +274,9 @@ level you are on.
   game), and `Secret_Exit`, a second way out whose `Unlocks` field names the
   secret level it opens. And the gems: `Gem` for one, `Gem_Line` for a row or
   column of them, one a tile along the rectangle's long side.
+  And for rooms: `Room`, a rectangle about a screen in size (30 by 15 tiles),
+  and `Spawn`, where you come back to life in it. A level with no `Room` is
+  one big scrolling room with `Checkpoint` lanterns, as levels used to be.
 - **Level identifiers** place a level on the map: `W2_4` is world 2, level 4
   (1 to 5, the fifth is the boss); `W1_S1` is a secret level of world 1, shown
   above the level whose secret exit names it.
@@ -255,9 +305,12 @@ nothing but import cycles, so files are grouped by prefix instead.
 | `physics.odin` | axis-separated AABB vs tiles, one-way platforms |
 | `ldtk.odin` | reading `levels/lumi.ldtk` |
 | `level.odin` | the level being played: checkpoints, the exits, fruit, hints |
+| `rooms.odin` | rooms: the camera's bounds, the slide between them, where you respawn |
+| `light.odin` | light and shadow blocks, switched by the dash |
 | `worldmap.odin` | the world map and the hero picker |
 | `progress.odin` | what is open and what is earned: unlocks, medals, heroes |
 | `save.odin` | the save file |
+| `settings.odin` | volumes, vibration and the two comfort settings |
 | `music.odin` | the tracks and the crossfade between them |
 | `things.odin` | traps and moving pieces |
 | `enemy.odin` | the creatures, and landing on them |
@@ -268,6 +321,8 @@ nothing but import cycles, so files are grouped by prefix instead.
 | `zone.odin` | the three worlds and how each one looks |
 | `decor.odin` | torches, roots, stalactites, crystals, drifting motes |
 | `atmosphere.odin` | sun shafts, the glow off water and lava |
+| `depth.odin` | haze, the mid-ground and the out-of-focus foreground |
+| `post.odin` | bloom and the vignette, over the finished picture |
 | `fx.odin` | sparks and puffs: dust, dash bursts, the puff you vanish and arrive in |
 | `lore.odin` | every line of prose in the game |
 | `animation.odin` | sprite sheets and the animation player |
@@ -276,12 +331,19 @@ nothing but import cycles, so files are grouped by prefix instead.
 | `hud_touch.odin` | the on-screen stick and buttons |
 | `hud_screens.odin` | title, how-to-play, pause and level-clear boards |
 | `ui.odin` | menu buttons and boards: layout, press handling, nine-slicing |
+| `devshots.odin`, `devsolve.odin`, `devsoak.odin` | the screenshot script, the room solver and the soak test: compiled in only when asked for |
 
-Outside `src/`: `levels/` is the LDtk project, `android/` the manifest,
-launcher icon and the native helper, `tools/` the build scripts,
-`tools/art/` the Python that draws the terrain and backdrops (`python3
-tools/art/make_art.py`, needs Pillow and NumPy), and
+Outside `src/`: `levels/` is the LDtk project and the text rooms it is partly
+built from, `android/` the manifest, launcher icon and the native helper,
+`tools/` the build scripts, `tools/levels/` the room builder, `tools/dev/` the
+three checks above, `tools/art/` the Python that draws the terrain and
+backdrops (`python3 tools/art/make_art.py`, needs Pillow and NumPy),
+`tools/audio/` the one that synthesizes a few of the sound effects, and
 `.github/workflows/android.yml` the CI that builds the APK.
+
+Some names inside still say `oddy` (`liboddy.so`, the `ODDY_*` build
+variables and secrets): the project's first name, kept because nothing a
+player sees depends on it.
 
 ## raylib
 
