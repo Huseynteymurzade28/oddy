@@ -194,7 +194,9 @@ level_reset_things :: proc(g: ^Game) {
 	clear(&g.rocks)
 	// The boss comes back at full strength, unless it is already beaten.
 	d := &g.levels[g.level.index]
-	if d.has_boss && !g.boss.beaten {
+	// One that has taken its last hit counts as beaten, though it is still falling.
+	down := g.boss.beaten || (g.boss.present && g.boss.hp <= 0)
+	if d.has_boss && !down {
 		g.boss = boss_make(d.boss, d.boss_pos)
 	} else if !d.has_boss {
 		g.boss = {}

@@ -124,6 +124,8 @@ game_update :: proc(g: ^Game, dt: f32) {
 	music_update(g, dt)
 	when DEV_SHOTS {
 		g.input = dev_input
+	} else when DEV_SOAK {
+		g.input = soak_input
 	} else {
 		g.input = input_poll(g)
 	}
@@ -139,7 +141,7 @@ game_update :: proc(g: ^Game, dt: f32) {
 
 	// A phone going to sleep, or a window losing focus, pauses the level
 	// rather than letting it run on while nobody is looking.
-	if g.state == .Playing && (g.input.pause || !rl.IsWindowFocused()) {
+	if g.state == .Playing && (g.input.pause || (!DEV_SOAK && !rl.IsWindowFocused())) {
 		game_set_state(g, .Paused)
 		return
 	}

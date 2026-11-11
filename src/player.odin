@@ -704,7 +704,7 @@ trail_update :: proc(p: ^Player, dt: f32) {
 // last checkpoint you touched.
 player_kill :: proc(g: ^Game) {
 	p := &g.player
-	if p.dead {
+	if p.dead || sim_immortal {
 		return
 	}
 	p.dead = true

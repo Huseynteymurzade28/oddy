@@ -64,6 +64,7 @@ Boss :: struct {
 	anim:    Animator,
 	present: bool,
 	beaten:  bool,
+	spared:  bool, // you have just landed on it: harmless until you are clear of it
 }
 
 // A ripple along the floor from the Ooze King's landing: low, so a hop
@@ -85,6 +86,8 @@ Rock :: struct {
 
 BOSS_HP :: 3
 BOSS_HURT :: 1.0
+THROW_SPEED :: 170.0 // sideways, off a boss you have just landed on
+THROW_TIME :: 0.35
 WAVE_SPEED :: 150.0
 WAVE_SIZE :: rl.Vector2{12, 9}
 ROCK_R :: 6.0
@@ -171,6 +174,18 @@ boss_update :: proc(g: ^Game, dt: f32) {
 		}
 		return
 	}
+	// Whatever happens, a boss that has left the level comes home: with it
+	// gone there is nothing to land on, and the exit never opens.
+	bounds := tilemap_bounds(&g.map_tiles)
+	if b.pos.x != b.pos.x || b.pos.y != b.pos.y || b.pos.x < 0 || b.pos.x > bounds.x || b.pos.y > bounds.y + 2 * TILE || b.pos.y < -4 * TILE {
+		b.pos = b.home
+		b.vel = {}
+		spawn_poof(g, &g.assets.player.appear, b.pos)
+		if b.state != .Hurt {
+			b.state = .Idle
+			b.timer = 1.2
+		}
+	}
 	if b.state == .Hurt {
 		if b.kind != .Broodmother {
 			fall(&g.map_tiles, b, dt)
@@ -254,7 +269,7 @@ ooze_update :: proc(g: ^Game, b: ^Boss, dt: f32) {
 			for d in ([2]f32{-1, 1}) {
 				append(&g.waves, Wave{pos = b.pos + {d * boss_rect(b^).width / 2, 0}, dir = d, life = 3})
 			}
-			if b.hp < BOSS_HP {
+			if b.hp < BOSS_HP && young_alive(g, .Slime) < 3 {
 				append(&g.enemies, enemy_make({kind = .Slime, rect = {b.pos.x - 8 + b.dir * 20, b.pos.y - 16, 16, 16}}))
 			}
 		}
@@ -292,16 +307,8 @@ brood_update :: proc(g: ^Game, b: ^Boss, dt: f32) {
 			b.timer = 0.7
 			b.target = p.pos
 			play(&g.assets, .Slam)
-			if b.hp < BOSS_HP {
-				young := 0
-				for e in g.enemies {
-					if e.alive && e.kind == .Bat {
-						young += 1
-					}
-				}
-				if young < 2 {
-					append(&g.enemies, enemy_make({kind = .Bat, rect = {b.pos.x - 8, b.pos.y - 30, 16, 16}}))
-				}
+			if b.hp < BOSS_HP && young_alive(g, .Bat) < 2 {
+				append(&g.enemies, enemy_make({kind = .Bat, rect = {b.pos.x - 8, b.pos.y - 30, 16, 16}}))
 			}
 		}
 	case .Wind_Up:
@@ -417,6 +424,50 @@ warden_update :: proc(g: ^Game, b: ^Boss, dt: f32) {
 	}
 }
 
+@(private = "file")
+young_alive :: proc(g: ^Game, kind: Enemy_Kind) -> int {
+	n := 0
+	for e in g.enemies {
+		if e.alive && e.kind == kind {
+			n += 1
+		}
+	}
+	return n
+}
+
+// Which way a hit throws you: to the side of the boss you were on, unless
+// that is the side it has its back to a wall on. Thrown that way you would
+// come straight down inside it, and die as it got up.
+@(private = "file")
+throw_side :: proc(g: ^Game, b: ^Boss) -> f32 {
+	p := &g.player
+	m := &g.map_tiles
+	br := boss_rect(b^)
+	side: f32 = p.pos.x < b.pos.x ? -1 : 1
+	ty := int(math.floor((b.pos.y - 8) / TILE))
+	for k in 0 ..< 3 {
+		x := (side < 0 ? br.x : br.x + br.width) + side * (f32(k) + 0.5) * TILE
+		if is_blocking(tile_at(m, int(math.floor(x / TILE)), ty)) {
+			return -side
+		}
+	}
+	return side
+}
+
+// The fight is over, or as good as: nothing it left behind can hurt you.
+@(private = "file")
+boss_quiet :: proc(g: ^Game) {
+	clear(&g.rocks)
+	clear(&g.waves)
+	for &e in g.enemies {
+		if e.alive {
+			e.alive = false
+			e.dying = 1
+			e.vel = {0, -120}
+		}
+	}
+}
+
 // A boss hitting the ground or a wall: dust, a thump, a shake.
 @(private = "file")
 landing :: proc(g: ^Game, b: ^Boss, colour: rl.Color) {
@@ -471,6 +522,12 @@ boss_touch_player :: proc(g: ^Game) {
 	pr := player_rect(p^)
 	br := boss_rect(b^)
 	if !rl.CheckCollisionRecs(pr, br) {
+		b.spared = false
+		return
+	}
+	if b.spared && b.state != .Attack {
+		// Still on top of it, or inside it, from the hit before: thrown at a
+		// wall, say. It will not kill you for that, until it attacks again.
 		return
 	}
 	open := b.state == .Open || (b.kind == .Ooze_King && b.state == .Idle)
@@ -483,8 +540,9 @@ boss_touch_player :: proc(g: ^Game) {
 		// death either; you bounce off and away.
 		p.pos.y = br.y
 		player_bounce(g, STOMP_BOUNCE)
-		p.vel.x = (p.pos.x < b.pos.x ? -1 : 1) * 170
-		p.wall_stick = 0.35
+		p.vel.x = throw_side(g, b) * THROW_SPEED
+		p.wall_stick = THROW_TIME
+		b.spared = true
 		return
 	}
 	if open && from_above {
@@ -496,10 +554,18 @@ boss_touch_player :: proc(g: ^Game) {
 		g.shake = max(g.shake, 6)
 		p.pos.y = br.y
 		player_bounce(g, STOMP_BOUNCE * 1.25)
-		// Thrown clear to the side you were on, so you never come down on it.
-		side: f32 = p.pos.x < b.pos.x ? -1 : 1
-		p.vel.x = side * 170
-		p.wall_stick = 0.35
+		// Thrown clear, so you never come down on it.
+		p.vel.x = throw_side(g, b) * THROW_SPEED
+		p.wall_stick = THROW_TIME
+		b.spared = true
+		// The breather: what it had already thrown at you is called off.
+		clear(&g.rocks)
+		clear(&g.waves)
+		if b.hp <= 0 {
+			// The last hit: it is beaten from this moment, though it takes a
+			// second to fall. Dying in that second used to bring it back.
+			boss_quiet(g)
+		}
 		spawn_burst(g, {b.pos.x, br.y}, {255, 255, 255, 255}, 18, 150, 1.5)
 		spawn_popup(g, {b.pos.x, br.y - 14}, {255, 230, 120, 255}, strings.clone_to_cstring(b.hp > 0 ? fmt.tprintf("%v LEFT", b.hp) : "DOWN!"))
 		play(&g.assets, .Stomp)
@@ -521,15 +587,7 @@ boss_defeat :: proc(g: ^Game) {
 	spawn_popup(g, g.level.exit - {0, 50}, {255, 230, 120, 255}, strings.clone_to_cstring("THE WAY IS OPEN"))
 	play(&g.assets, .Clear)
 	haptic(.Clear)
-	clear(&g.rocks)
-	clear(&g.waves)
-	for &e in g.enemies {
-		if e.alive {
-			e.alive = false
-			e.dying = 1
-			e.vel = {0, -120}
-		}
-	}
+	boss_quiet(g)
 }
 
 // ------------------------------------------------------- waves and rocks ---

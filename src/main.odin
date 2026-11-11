@@ -21,6 +21,8 @@ when !IS_MOBILE {
 			dev_shots_main()
 		} else when DEV_SOLVE {
 			dev_solve_main()
+		} else when DEV_SOAK {
+			dev_soak_main()
 		} else {
 			run()
 		}
